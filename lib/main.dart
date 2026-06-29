@@ -16,54 +16,10 @@ import 'package:shelf_router/shelf_router.dart' as shelf_router;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
-
-// --- TEMAS PREDEFINIDOS ---
-class TemaCustomizado {
-  final String nome;
-  final Color cor1; // Primária
-  final Color cor2; // Secundária
-  final Color fundoBatida;
-
-  const TemaCustomizado({
-    required this.nome,
-    required this.cor1,
-    required this.cor2,
-    required this.fundoBatida,
-  });
-}
-
-final temasPredefinidos = {
-  'azul': const TemaCustomizado(
-    nome: 'Azul',
-    cor1: Color(0xFF2563EB),
-    cor2: Color(0xFF1E3A8A),
-    fundoBatida: Color(0xFFF8FAFC),
-  ),
-  'rosa': const TemaCustomizado(
-    nome: 'Rosa',
-    cor1: Color(0xFFEC4899),
-    cor2: Color(0xFFBE185D),
-    fundoBatida: Color(0xFFFCE7F3),
-  ),
-  'roxo': const TemaCustomizado(
-    nome: 'Roxo',
-    cor1: Color(0xFFA855F7),
-    cor2: Color(0xFF7E22CE),
-    fundoBatida: Color(0xFFFAF5FF),
-  ),
-  'verde': const TemaCustomizado(
-    nome: 'Verde',
-    cor1: Color(0xFF10B981),
-    cor2: Color(0xFF047857),
-    fundoBatida: Color(0xFFF0FDF4),
-  ),
-  'laranja': const TemaCustomizado(
-    nome: 'Laranja',
-    cor1: Color(0xFFF97316),
-    cor2: Color(0xFFB45309),
-    fundoBatida: Color(0xFFFFF7ED),
-  ),
-};
+import 'models/convenio.dart';
+import 'models/consulta_registro.dart';
+import 'models/plantao_registro.dart';
+import 'models/tema_customizado.dart';
 
 void main() {
   runApp(const MyApp());
@@ -84,73 +40,6 @@ class MyApp extends StatelessWidget {
       home: const DashboardPage(),
     );
   }
-}
-
-// Modelo para estruturar os registros de plantões
-class PlantaoRegistro {
-  final String id;
-  final bool chamei5Pacientes;
-  final int pacientesAdicionais;
-  final double valorTotal;
-  final DateTime hora;
-  final DateTime modificadoEm;
-
-  PlantaoRegistro({
-    required this.id,
-    required this.chamei5Pacientes,
-    required this.pacientesAdicionais,
-    required this.valorTotal,
-    required this.hora,
-    required this.modificadoEm,
-  });
-}
-
-// Modelo para estruturar os registros de consultas
-class ConsultaRegistro {
-  final String id; // Identificador único para cada registro
-  final String nomeConvenio;
-  final double valor;
-  final DateTime hora;
-  final DateTime modificadoEm; // Para LWW (Last Write Wins)
-
-  ConsultaRegistro({
-    // Adiciona 'id' ao construtor
-    required this.id,
-    required this.nomeConvenio,
-    required this.valor,
-    required this.hora,
-    required this.modificadoEm,
-  });
-}
-
-// Modelo para os tipos de fila/convênio
-class Convenio {
-  String id;
-  String nome;
-  double valor;
-  Color cor;
-
-  Convenio({
-    required this.id,
-    required this.nome,
-    required this.valor,
-    required this.cor,
-  });
-
-  // Métodos para serialização JSON (para salvar localmente)
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'nome': nome,
-    'valor': valor,
-    'cor': cor.value,
-  };
-
-  factory Convenio.fromJson(Map<String, dynamic> json) => Convenio(
-    id: json['id'] ?? UniqueKey().toString(),
-    nome: json['nome'],
-    valor: json['valor'],
-    cor: Color(json['cor']),
-  );
 }
 
 class DashboardPage extends StatefulWidget {
@@ -1045,6 +934,40 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     }
 
+    // NOVO: Lógica para adicionar filas (convênios) ausentes do arquivo de backup.
+    // Isso garante que dados de filas antigas fiquem visíveis após a importação.
+    final Set<String> nomesConveniosAtuais = {
+      ..._convenios.map((c) => c.nome),
+      ...conveniosRemotos.map((c) => c.nome),
+    };
+    final Set<String> nomesConveniosNosRegistros = registrosRemotos
+        .map((c) => c.nomeConvenio)
+        .toSet();
+
+    final conveniosParaAdicionar = <Convenio>[];
+    for (final nomeRemoto in nomesConveniosNosRegistros) {
+      if (!nomesConveniosAtuais.contains(nomeRemoto)) {
+        // Cria um novo convênio com valores padrão se ele não existir
+        print('ℹ️ Fila "$nomeRemoto" não encontrada. Adicionando...');
+        conveniosParaAdicionar.add(
+          Convenio(
+            id: nomeRemoto.toLowerCase().replaceAll(
+              ' ',
+              '_',
+            ), // Gera um ID simples
+            nome: nomeRemoto,
+            valor: 0.0, // Valor padrão, pode ser editado depois
+            cor: Colors.grey, // Cor padrão
+          ),
+        );
+      }
+    }
+
+    if (conveniosParaAdicionar.isNotEmpty) {
+      // Adiciona os novos convênios à lista de remotos para serem mesclados
+      conveniosRemotos.addAll(conveniosParaAdicionar);
+    }
+
     final List<ConsultaRegistro> listaFinal;
     final List<Convenio> conveniosFinais;
 
@@ -1094,6 +1017,18 @@ class _DashboardPageState extends State<DashboardPage> {
       metaMensal = dados['metaMensal'] ?? 0.0;
       taxaDesconto = dados['taxaDesconto'] ?? 0.158;
     });
+
+    if (conveniosParaAdicionar.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.blue,
+          content: Text(
+            'ℹ️ ${conveniosParaAdicionar.length} nova(s) fila(s) foi/foram adicionada(s) a partir do backup. Você pode editá-la(s) no gerenciador de filas.',
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
     _salvarDados(); // Salva os dados importados
   }
 
@@ -1517,26 +1452,25 @@ class _DashboardPageState extends State<DashboardPage> {
       // Sempre que um serviço for descoberto ou sumir, ele chama esse listener.
       discovery.addListener(() {
         if (!mounted) return;
-
-        final newServices = <Service>[];
-        for (var service in discovery.services) {
-          // Evita adicionar o próprio dispositivo na lista
-          if (service.host != meuIpLocal) {
-            // Remove duplicatas pelo nome antes de adicionar o atualizado
-            newServices.removeWhere((s) => s.name == service.name);
-            newServices.add(service);
+        // Defer state updates to avoid calling setState during a build, which can cause exceptions.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            final newServices = <Service>[];
+            for (var service in discovery.services) {
+              // Evita adicionar o próprio dispositivo na lista
+              if (service.host != meuIpLocal) {
+                newServices.add(service);
+              }
+            }
+            // Use setState on the main state
+            setState(() {
+              _discoveredServices.clear();
+              // Use a Set to easily remove duplicates before converting back to a List
+              _discoveredServices.addAll(newServices.toSet().toList());
+            });
+            // Trigger a rebuild on the modal if it's open
+            modalSetState?.call(() {});
           }
-        }
-
-        setState(() {
-          _discoveredServices.clear();
-          _discoveredServices.addAll(newServices);
-        });
-
-        // Atualiza o estado da modal em tempo real
-        modalSetState?.call(() {
-          _discoveredServices.clear();
-          _discoveredServices.addAll(newServices);
         });
       });
     } catch (e) {
@@ -4331,15 +4265,20 @@ class _DashboardPageState extends State<DashboardPage> {
               PieChartData(
                 pieTouchData: PieTouchData(
                   touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                    setState(() {
-                      if (!event.isInterestedForInteractions ||
-                          pieTouchResponse == null ||
-                          pieTouchResponse.touchedSection == null) {
-                        _touchedIndex = -1;
-                        return;
-                      }
-                      _touchedIndex =
-                          pieTouchResponse.touchedSection!.touchedSectionIndex;
+                    // Defer the setState call to prevent exceptions when the callback
+                    // is triggered during a build phase (e.g., by a hover event).
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      setState(() {
+                        if (!event.isInterestedForInteractions ||
+                            pieTouchResponse == null ||
+                            pieTouchResponse.touchedSection == null) {
+                          _touchedIndex = -1;
+                          return;
+                        }
+                        _touchedIndex = pieTouchResponse
+                            .touchedSection!
+                            .touchedSectionIndex;
+                      });
                     });
                   },
                 ),

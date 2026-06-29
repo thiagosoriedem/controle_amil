@@ -1,0 +1,1068 @@
+{
+  "timestamp": "2026-06-29T19:09:17.231204",
+  "consultas": [
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T18:44:36.959582"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T18:44:36.159430"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T18:19:50.841851"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T17:58:48.961022"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T17:43:22.280668"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T17:39:05.766228"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T17:30:17.263663"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T16:54:11.368253"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T16:50:33.715599"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T16:38:34.023255"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T16:24:10.494382"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T16:08:21.094277"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T15:55:42.873211"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T15:14:30.780533"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T15:00:33.238802"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T14:26:49.677782"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T14:13:02.527662"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T13:42:54.590013"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T13:37:30.151085"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T13:30:46.818324"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T12:51:21.096442"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T11:43:29.874522"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T11:31:23.486798"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T11:25:23.669221"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T11:16:31.487711"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T11:12:13.540143"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T10:39:55.452730"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T10:14:54.356373"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T09:54:15.851038"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T09:47:05.557377"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T09:39:08.669566"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T09:31:09.053873"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T09:12:04.456811"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T08:58:33.505824"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T08:55:30.496420"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T08:47:27.011521"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T08:23:24.845050"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T08:07:42.304566"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T08:01:07.203213"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T07:50:53.831793"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T07:36:16.887041"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T07:34:02.214345"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-29T07:26:30.249115"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-28T19:41:35.016653"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-28T19:37:08.660579"
+    },
+    {
+      "fila": "Fila Ped",
+      "valor": 18.0,
+      "hora": "2026-06-28T19:29:02.936730"
+    },
+    {
+      "fila": "Fila Ped",
+      "valor": 18.0,
+      "hora": "2026-06-28T19:01:51.009056"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-28T19:01:49.497618"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:06.283174"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:05.354058"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:04.894791"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:04.610745"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:04.214131"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:03.712237"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:03.483996"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:03.330333"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:03.162765"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:02.825326"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:02.611198"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:02.462709"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:02.294777"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:02.140721"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:01.987560"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:01.825931"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:01.659060"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:01.512494"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:01.350688"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:01.181429"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:01.012278"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:00.844148"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:00.705446"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:00.459320"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:00.238846"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:55:00.070400"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:59.907590"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:59.756950"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:59.466415"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:59.248260"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:59.095303"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:58.925030"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:58.779519"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:58.611378"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:58.442673"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:58.280667"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:58.119847"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:57.959100"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:57.798094"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:55.863928"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:55.640029"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:55.472096"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:55.310774"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:55.156676"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:54.988364"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:54.827150"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:54.657798"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:54.505007"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:54.327615"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:54.175245"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:54.005355"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:53.847835"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:53.683859"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:53.521548"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:53.361611"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:53.191518"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:53.015517"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:54:52.793183"
+    },
+    {
+      "fila": "Pct Adc Plantão",
+      "valor": 0.0,
+      "hora": "2026-06-27T17:54:20.583550"
+    },
+    {
+      "fila": "Pct Adc Plantão",
+      "valor": 0.0,
+      "hora": "2026-06-27T17:54:19.734904"
+    },
+    {
+      "fila": "Pct Adc Plantão",
+      "valor": 0.0,
+      "hora": "2026-06-27T17:54:19.042360"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:51:44.397246"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:36.450407"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:35.811402"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:34.361404"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:33.580801"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:33.071561"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:32.545564"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:32.005570"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:31.472365"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:30.949010"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:30.357819"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:29.800639"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:51:29.196223"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:51:06.021450"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:51:05.421403"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:51:04.754409"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:50:39.775067"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:50:39.203248"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:50:38.556"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:50:28.298771"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:50:27.678775"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:50:27.007351"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:50:26.373928"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:50:25.657329"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:50:24.960114"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:50:13.545318"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:50:12.932095"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:50:12.304778"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:50:11.605736"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:50:09.147737"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:50:08.605991"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:50:07.920576"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:50:07.104553"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:49:59.311571"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:49:58.623571"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:49:57.877201"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:38.562592"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:38.006307"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:37.327245"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:35.992186"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:35.387190"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:34.813995"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:34.191899"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:33.521147"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:32.914442"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:32.353483"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:31.731428"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:31.093379"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:30.351604"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:49:28.047341"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:49:08.999949"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:49:08.394119"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:49:07.820493"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:49:07.211842"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:49:06.543933"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:49:05.892670"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:48:51.072185"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:48:50.515190"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:48:49.819093"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:48:49.196887"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:48:48.592906"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:48:48.039609"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:48:46.122617"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:48:45.355559"
+    },
+    {
+      "fila": "Amil Um",
+      "valor": 20.0,
+      "hora": "2026-06-27T17:48:44.652980"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:48:41.064816"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:48:40.313812"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:48:39.613704"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:48:01.609685"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:48:01.116165"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:48:00.546264"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:48:00.002260"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:47:59.509702"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:47:58.891427"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:47:58.319956"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:47:57.653415"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:47:56.604169"
+    },
+    {
+      "fila": "Fila Adulto",
+      "valor": 15.0,
+      "hora": "2026-06-27T17:47:55.294562"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T17:40:38.904583"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T17:33:54.982667"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T17:24:43.216641"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T16:52:37.930306"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T16:49:29.423784"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T16:39:14.231171"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T16:30:15.854377"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T16:20:13.702156"
+    },
+    {
+      "fila": "Pct Adc Plantão",
+      "valor": 0.0,
+      "hora": "2026-06-24T15:53:45.265144"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T15:51:29.534298"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T15:39:42.316319"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T15:32:40.402759"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T15:20:37.122869"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T15:00:19.385395"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T14:46:12.776116"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T14:04:23.382112"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T13:50:56.069199"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T13:33:37.980158"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T13:26:38.447615"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T13:26:27.806808"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T12:58:27.314782"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T12:47:47.784589"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T12:40:58.099162"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T12:22:58.872849"
+    },
+    {
+      "fila": "Pct Plantão",
+      "valor": 20.0,
+      "hora": "2026-06-24T12:22:58.200364"
+    }
+  ],
+  "metaDiaria": 0.0,
+  "metaMensal": 0.0,
+  "taxaDesconto": 0.158
+}
