@@ -86,6 +86,25 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// Modelo para estruturar os registros de plantões
+class PlantaoRegistro {
+  final String id;
+  final bool chamei5Pacientes;
+  final int pacientesAdicionais;
+  final double valorTotal;
+  final DateTime hora;
+  final DateTime modificadoEm;
+
+  PlantaoRegistro({
+    required this.id,
+    required this.chamei5Pacientes,
+    required this.pacientesAdicionais,
+    required this.valorTotal,
+    required this.hora,
+    required this.modificadoEm,
+  });
+}
+
 // Modelo para estruturar os registros de consultas
 class ConsultaRegistro {
   final String id; // Identificador único para cada registro
@@ -159,6 +178,14 @@ class _DashboardPageState extends State<DashboardPage> {
     ];
   }
 
+  // --- Estado do Registro de Plantões ---
+  final List<PlantaoRegistro> _historicoPlantoes = [];
+  bool _chamei5Pacientes = false;
+  final TextEditingController _pacientesAdicionaisController =
+      TextEditingController();
+  final double _valorBasePlantao = 100.0;
+  final double _valorAdicionalPlantao = 7.0;
+
   // Configurações de Metas
   double metaDiaria = 0.0;
   double metaMensal = 0.0;
@@ -203,6 +230,9 @@ class _DashboardPageState extends State<DashboardPage> {
   );
   DateTime _revenueChartEndDate = DateTime.now();
 
+  // NOVO: Estado para a data de análise dos gráficos diários
+  DateTime _analiseDataSelecionada = DateTime.now();
+
   TemaCustomizado get temaAtual => temasPredefinidos[_temaSelecionado]!;
 
   @override
@@ -244,104 +274,299 @@ class _DashboardPageState extends State<DashboardPage> {
     consultasDoMes.sort((a, b) => a.hora.compareTo(b.hora));
 
     final receitaBruta = consultasDoMes.fold(0.0, (s, c) => s + c.valor);
-    final desconto = receitaBruta * taxaDesconto;
-    final receitaLiquida = receitaBruta - desconto;
+    final descontoImpostos = receitaBruta * taxaDesconto;
+    final receitaLiquida = receitaBruta - descontoImpostos;
 
-    // 2. Criar o documento PDF
+    // --- DADOS PARA GRÁFICOS ---
+    // 1. Faturamento por Fila (Gráfico de Pizza)
+    final Map<String, double> faturamentoPorFila = {};
+    for (var consulta in consultasDoMes) {
+      faturamentoPorFila.update(
+        consulta.nomeConvenio,
+        (value) => value + consulta.valor,
+        ifAbsent: () => consulta.valor,
+      );
+    }
+
+    // 2. Distribuição Horária (Gráfico de Barras)
+    final Map<int, int> consultasPorHora = {};
+    for (var consulta in consultasDoMes) {
+      consultasPorHora.update(
+        consulta.hora.hour,
+        (value) => value + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    final horasComAtendimento = consultasPorHora.keys.toList()..sort();
+    int maxConsultasNaHora = 0;
+    if (consultasPorHora.isNotEmpty) {
+      maxConsultasNaHora = consultasPorHora.values.reduce(
+        (a, b) => a > b ? a : b,
+      );
+    }
+    if (maxConsultasNaHora == 0) maxConsultasNaHora = 1;
+
+    // --- CORES DO TEMA ---
+    final corPrimaria = PdfColor.fromInt(temaAtual.cor1.value);
+    final corPrimariaClaro = PdfColor(
+      temaAtual.cor1.red / 255.0,
+      temaAtual.cor1.green / 255.0,
+      temaAtual.cor1.blue / 255.0,
+      0.2,
+    );
+    final corSecundaria = PdfColor.fromInt(temaAtual.cor2.value);
+    final corFundoClaro = PdfColor.fromInt(temaAtual.fundoBatida.value);
+
+    // 2. Criar o documento PDF com novo layout
     final pdf = pw.Document();
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
-        build: (pw.Context context) {
-          return [
-            // Cabeçalho
-            pw.Header(
-              level: 0,
-              child: pw.Text(
-                'Relatório de Faturamento - Telemedicina Amil',
-                style: pw.TextStyle(
-                  fontSize: 24,
-                  fontWeight: pw.FontWeight.bold,
-                ),
+        header: (pw.Context context) {
+          return pw.Container(
+            alignment: pw.Alignment.centerLeft,
+            margin: const pw.EdgeInsets.only(bottom: 3.0 * PdfPageFormat.mm),
+            padding: const pw.EdgeInsets.only(bottom: 3.0 * PdfPageFormat.mm),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                bottom: pw.BorderSide(width: 0.5, color: PdfColors.grey),
               ),
             ),
-            pw.Text(
-              'Mês de Referência: ${agora.month.toString().padLeft(2, "0")}/${agora.year}',
-              style: const pw.TextStyle(fontSize: 14, color: PdfColors.grey700),
+            child: pw.Text(
+              'Relatório de Faturamento - Telemedicina Amil',
+              style: pw.Theme.of(
+                context,
+              ).defaultTextStyle.copyWith(color: PdfColors.grey),
             ),
-            pw.SizedBox(height: 24),
+          );
+        },
+        footer: (pw.Context context) {
+          return pw.Container(
+            alignment: pw.Alignment.centerRight,
+            margin: const pw.EdgeInsets.only(top: 1.0 * PdfPageFormat.cm),
+            child: pw.Text(
+              'Página ${context.pageNumber} de ${context.pagesCount}',
+              style: pw.Theme.of(
+                context,
+              ).defaultTextStyle.copyWith(color: PdfColors.grey),
+            ),
+          );
+        },
+        build: (pw.Context context) {
+          return [
+            // Título Principal
+            pw.Header(
+              level: 0,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Relatório Mensal',
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                      color: corPrimaria,
+                    ),
+                  ),
+                  pw.Text(
+                    '${agora.month.toString().padLeft(2, "0")}/${agora.year}',
+                    style: pw.TextStyle(fontSize: 18, color: corSecundaria),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 1.0 * PdfPageFormat.cm),
 
             // Resumo Financeiro
             pw.Container(
-              padding: const pw.EdgeInsets.all(12),
+              padding: const pw.EdgeInsets.all(16),
               decoration: pw.BoxDecoration(
-                color: PdfColors.grey100,
+                color: corFundoClaro,
                 borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-                border: pw.Border.all(color: PdfColors.grey300),
+                border: pw.Border.all(color: corPrimaria, width: 1.5),
               ),
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(
-                    'Resumo Financeiro',
+                    'Resumo Financeiro do Mês',
                     style: pw.TextStyle(
-                      fontSize: 16,
+                      fontSize: 18,
                       fontWeight: pw.FontWeight.bold,
+                      color: corSecundaria,
                     ),
                   ),
+                  pw.Divider(color: corPrimaria, height: 20),
+                  _buildResumoRowPDF(
+                    'Total de Atendimentos:',
+                    '${consultasDoMes.length}',
+                  ),
+                  _buildResumoRowPDF(
+                    'Receita Bruta:',
+                    'R\$ ${receitaBruta.toStringAsFixed(2)}',
+                  ),
+                  _buildResumoRowPDF(
+                    'Impostos (${(taxaDesconto * 100).toStringAsFixed(1)}%):',
+                    '- R\$ ${descontoImpostos.toStringAsFixed(2)}',
+                    valorColor: PdfColors.red,
+                  ),
                   pw.SizedBox(height: 8),
-                  pw.Text(
-                    'Total de Atendimentos: ${consultasDoMes.length}',
-                    style: const pw.TextStyle(fontSize: 14),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    'Receita Bruta: R\$ ${receitaBruta.toStringAsFixed(2)}',
-                    style: const pw.TextStyle(fontSize: 14),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    'Desconto de Impostos (${(taxaDesconto * 100).toStringAsFixed(1)}%): R\$ ${desconto.toStringAsFixed(2)}',
-                    style: const pw.TextStyle(
-                      fontSize: 14,
-                      color: PdfColors.red700,
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
                     ),
-                  ),
-                  pw.SizedBox(height: 8),
-                  pw.Text(
-                    'Receita Líquida Estimada: R\$ ${receitaLiquida.toStringAsFixed(2)}',
-                    style: pw.TextStyle(
-                      fontSize: 16,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.green700,
+                    decoration: pw.BoxDecoration(
+                      color: corPrimariaClaro,
+                      borderRadius: const pw.BorderRadius.all(
+                        pw.Radius.circular(4),
+                      ),
+                    ),
+                    child: _buildResumoRowPDF(
+                      'Receita Líquida Estimada:',
+                      'R\$ ${receitaLiquida.toStringAsFixed(2)}',
+                      labelStyle: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        color: corFundoClaro,
+                      ),
+                      valorStyle: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        color: corFundoClaro,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            pw.SizedBox(height: 24),
+            pw.SizedBox(height: 1.0 * PdfPageFormat.cm),
+
+            // Seção de Gráficos
+            pw.Text(
+              'Análise Gráfica do Mês',
+              style: pw.TextStyle(
+                fontSize: 20,
+                fontWeight: pw.FontWeight.bold,
+                color: corPrimaria,
+              ),
+            ),
+            pw.SizedBox(height: 0.5 * PdfPageFormat.cm),
+            // The side-by-side layout with `pw.Row` was replaced by a `pw.Column`
+            // to prevent the `PdfTooBigPageException`. A `pw.Row` is not pageable,
+            // so if its content (e.g., a long list of convenios in the graph legend)
+            // becomes taller than a page, it causes an error. This new layout
+            // places the graphs one below the other, ensuring they can break
+            // across pages correctly.
+
+            // Gráfico de Pizza (Legenda)
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Faturamento por Fila',
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: corSecundaria,
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  if (receitaBruta > 0)
+                    ..._convenios.map((convenio) {
+                      final faturamento =
+                          faturamentoPorFila[convenio.nome] ?? 0.0;
+                      if (faturamento == 0) return pw.SizedBox.shrink();
+                      final percentual = (faturamento / receitaBruta) * 100;
+                      return pw.Padding(
+                        padding: const pw.EdgeInsets.only(bottom: 4),
+                        child: _buildLegendaPizzaRowPDF(
+                          color: PdfColor.fromInt(convenio.cor.value),
+                          texto:
+                              '${convenio.nome}: R\$ ${faturamento.toStringAsFixed(2)} (${percentual.toStringAsFixed(1)}%)',
+                        ),
+                      );
+                    }).toList()
+                  else
+                    pw.Text(
+                      'Nenhum faturamento no mês.',
+                      style: const pw.TextStyle(color: PdfColors.grey),
+                    ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 0.5 * PdfPageFormat.cm),
+            // Gráfico de Distribuição Horária
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Distribuição Horária',
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      color: corSecundaria,
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  if (horasComAtendimento.isNotEmpty)
+                    ...horasComAtendimento.map((hora) {
+                      final quantidade = consultasPorHora[hora]!;
+                      final fatorLargura = quantidade / maxConsultasNaHora;
+                      return pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(vertical: 2),
+                        child: _buildBarraHorariaRowPDF(
+                          hora: '$hora:00',
+                          quantidade: quantidade,
+                          fatorLargura: fatorLargura,
+                          cor: corPrimaria,
+                        ),
+                      );
+                    })
+                  else
+                    pw.Text(
+                      'Nenhum atendimento no mês.',
+                      style: const pw.TextStyle(color: PdfColors.grey),
+                    ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 1.0 * PdfPageFormat.cm),
 
             // Tabela de Histórico
             pw.Text(
               'Histórico Detalhado',
-              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(
+                fontSize: 20,
+                fontWeight: pw.FontWeight.bold,
+                color: corPrimaria,
+              ),
             ),
-            pw.SizedBox(height: 10),
+            pw.SizedBox(height: 0.5 * PdfPageFormat.cm),
             if (consultasDoMes.isEmpty)
               pw.Text(
                 'Nenhum atendimento registrado neste mês.',
                 style: const pw.TextStyle(color: PdfColors.grey),
               )
             else
-              pw.TableHelper.fromTextArray(
-                context: context,
-                headerDecoration: const pw.BoxDecoration(
-                  color: PdfColors.blue100,
+              pw.Table.fromTextArray(
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.white,
                 ),
-                headerHeight: 25,
-                cellHeight: 20,
+                headerDecoration: pw.BoxDecoration(color: corPrimaria),
+                cellHeight: 25,
                 cellAlignments: {
                   0: pw.Alignment.centerLeft,
                   1: pw.Alignment.center,
@@ -370,23 +595,47 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
 
-    // 3. Salvar e Compartilhar
-    try {
-      final tempDir = await getTemporaryDirectory();
-      final file = File(
-        '${tempDir.path}/Faturamento_Amil_${agora.month}_${agora.year}.pdf',
-      );
-      await file.writeAsBytes(await pdf.save());
+    // 3. Salvar e Compartilhar/Abrir
 
-      final xFile = XFile(
-        file.path,
-        name: 'Faturamento_Amil_${agora.month}_${agora.year}.pdf',
-      );
-      await Share.shareXFiles(
-        [xFile],
-        text:
-            'Relatório de Faturamento - Telemedicina Amil (${agora.month}/${agora.year})',
-      );
+    try {
+      final pdfBytes = await pdf.save();
+      final fileName = 'Faturamento_Amil_${agora.month}_${agora.year}.pdf';
+
+      // Lógica condicional para salvar o arquivo
+      if (Platform.isAndroid || Platform.isIOS) {
+        // Em dispositivos móveis, usar a tela de compartilhamento
+        final tempDir = await getTemporaryDirectory();
+        final filePath = '${tempDir.path}/$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(pdfBytes);
+
+        final xFile = XFile(filePath, name: fileName);
+        await Share.shareXFiles(
+          [xFile],
+          text:
+              'Relatório de Faturamento - Telemedicina Amil (${agora.month}/${agora.year})',
+        );
+      } else {
+        // Em Desktop (Windows, Linux, macOS), usar o diálogo "Salvar como..."
+        String? outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Salvar Relatório PDF',
+          fileName: fileName,
+          type: FileType.custom,
+          allowedExtensions: ['pdf'],
+        );
+
+        if (outputFile != null) {
+          final file = File(outputFile);
+          await file.writeAsBytes(pdfBytes);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.green,
+              content: Text('✅ Relatório PDF salvo com sucesso!'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -397,6 +646,100 @@ class _DashboardPageState extends State<DashboardPage> {
         );
       }
     }
+  }
+
+  // --- WIDGETS AUXILIARES PARA PDF ---
+
+  pw.Widget _buildResumoRowPDF(
+    String label,
+    String valor, {
+    pw.TextStyle? labelStyle,
+    pw.TextStyle? valorStyle,
+    PdfColor? valorColor,
+  }) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(label, style: labelStyle ?? const pw.TextStyle(fontSize: 12)),
+          pw.Text(
+            valor,
+            style:
+                valorStyle ??
+                pw.TextStyle(
+                  fontSize: 12,
+                  fontWeight: pw.FontWeight.bold,
+                  color: valorColor,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildLegendaPizzaRowPDF({
+    required PdfColor color,
+    required String texto,
+  }) {
+    return pw.Row(
+      children: [
+        pw.Container(width: 12, height: 12, color: color),
+        pw.SizedBox(width: 8),
+        pw.Expanded(
+          child: pw.Text(texto, style: const pw.TextStyle(fontSize: 9)),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildBarraHorariaRowPDF({
+    required String hora,
+    required int quantidade,
+    required double fatorLargura,
+    required PdfColor cor,
+  }) {
+    return pw.Row(
+      children: [
+        pw.SizedBox(
+          width: 35,
+          child: pw.Text(hora, style: const pw.TextStyle(fontSize: 9)),
+        ),
+        pw.Expanded(
+          child: pw.LayoutBuilder(
+            builder: (context, constraints) {
+              return pw.Container(
+                height: 12,
+                decoration: const pw.BoxDecoration(
+                  color: PdfColors.grey200,
+                  borderRadius: pw.BorderRadius.all(pw.Radius.circular(6)),
+                ),
+                child: pw.Align(
+                  alignment: pw.Alignment.centerLeft,
+                  child: pw.Container(
+                    width: (constraints?.maxWidth ?? 0) * fatorLargura,
+                    decoration: pw.BoxDecoration(
+                      color: cor,
+                      borderRadius: const pw.BorderRadius.all(
+                        pw.Radius.circular(6),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        pw.SizedBox(
+          width: 25,
+          child: pw.Text(
+            '$quantidade',
+            textAlign: pw.TextAlign.right,
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+          ),
+        ),
+      ],
+    );
   }
 
   // --- PERSISTÊNCIA DE DADOS ---
@@ -439,6 +782,23 @@ class _DashboardPageState extends State<DashboardPage> {
     );
     await prefs.setString('convenios', conveniosJson);
 
+    // Salvar histórico de plantões
+    final plantoesJson = jsonEncode(
+      _historicoPlantoes
+          .map(
+            (p) => {
+              'id': p.id,
+              'chamei5Pacientes': p.chamei5Pacientes,
+              'pacientesAdicionais': p.pacientesAdicionais,
+              'valorTotal': p.valorTotal,
+              'hora': p.hora.toIso8601String(),
+              'modificadoEm': p.modificadoEm.toIso8601String(),
+            },
+          )
+          .toList(),
+    );
+    await prefs.setString('historico_plantoes', plantoesJson);
+
     print('💾 Dados salvos localmente.');
 
     // Dispara a sincronização automática se ativa
@@ -466,6 +826,25 @@ class _DashboardPageState extends State<DashboardPage> {
             modificadoEm: item['modificadoEm'] != null
                 ? DateTime.parse(item['modificadoEm'])
                 : DateTime.parse(item['hora']), // Fallback para dados antigos
+          ),
+        ),
+      );
+    }
+
+    // Carregar histórico de plantões
+    final plantoesJsonString = prefs.getString('historico_plantoes');
+    if (plantoesJsonString != null) {
+      final List<dynamic> plantoesDecoded = jsonDecode(plantoesJsonString);
+      _historicoPlantoes.clear();
+      _historicoPlantoes.addAll(
+        plantoesDecoded.map(
+          (item) => PlantaoRegistro(
+            id: item['id'] ?? UniqueKey().toString(),
+            chamei5Pacientes: item['chamei5Pacientes'],
+            pacientesAdicionais: item['pacientesAdicionais'],
+            valorTotal: item['valorTotal'],
+            hora: DateTime.parse(item['hora']),
+            modificadoEm: DateTime.parse(item['modificadoEm'] ?? item['hora']),
           ),
         ),
       );
@@ -571,6 +950,18 @@ class _DashboardPageState extends State<DashboardPage> {
             },
           )
           .toList(),
+      'plantoes': _historicoPlantoes
+          .map(
+            (p) => {
+              'id': p.id,
+              'chamei5Pacientes': p.chamei5Pacientes,
+              'pacientesAdicionais': p.pacientesAdicionais,
+              'valorTotal': p.valorTotal,
+              'hora': p.hora.toIso8601String(),
+              'modificadoEm': p.modificadoEm.toIso8601String(),
+            },
+          )
+          .toList(),
       'convenios': _convenios.map((c) => c.toJson()).toList(),
       'metaDiaria': metaDiaria,
       'metaMensal': metaMensal,
@@ -581,6 +972,23 @@ class _DashboardPageState extends State<DashboardPage> {
   void _importarDados(Map<String, dynamic> dados, {bool mesclar = true}) {
     // --- LÓGICA DE MERGE DE DADOS ---
     final List<ConsultaRegistro> registrosRemotos = [];
+    final List<PlantaoRegistro> plantoesRemotos = [];
+    if (dados['plantoes'] != null) {
+      for (var p in dados['plantoes']) {
+        plantoesRemotos.add(
+          PlantaoRegistro(
+            id: p['id'] ?? UniqueKey().toString(),
+            chamei5Pacientes: p['chamei5Pacientes'],
+            pacientesAdicionais: p['pacientesAdicionais'],
+            valorTotal: p['valorTotal'],
+            hora: DateTime.parse(p['hora']),
+            modificadoEm: p['modificadoEm'] != null
+                ? DateTime.parse(p['modificadoEm'])
+                : DateTime.parse(p['hora']),
+          ),
+        );
+      }
+    }
     if (dados['consultas'] != null) {
       for (var c in dados['consultas']) {
         registrosRemotos.add(
@@ -1217,6 +1625,201 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   // --- LÓGICA DE NEGÓCIO (CÁLCULOS DINÂMICOS) ---
+  void _registrarPlantao() {
+    final adicionaisText = _pacientesAdicionaisController.text.trim();
+    final adicionais = int.tryParse(adicionaisText) ?? 0;
+
+    final valorTotal =
+        (_chamei5Pacientes ? _valorBasePlantao : 0.0) +
+        (adicionais * _valorAdicionalPlantao);
+
+    if (valorTotal == 0) return; // Evita registrar plantão vazio
+
+    setState(() {
+      _historicoPlantoes.insert(
+        0,
+        PlantaoRegistro(
+          id: UniqueKey().toString(),
+          chamei5Pacientes: _chamei5Pacientes,
+          pacientesAdicionais: adicionais,
+          valorTotal: valorTotal,
+          hora: DateTime.now(),
+          modificadoEm: DateTime.now(),
+        ),
+      );
+
+      // Limpa os campos após registrar
+      _chamei5Pacientes = false;
+      _pacientesAdicionaisController.clear();
+      _salvarDados();
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('✅ Plantão registrado com sucesso!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Widget _buildRegistroPlantoesCard(bool isMobile) {
+    final hoje = DateTime.now();
+    final plantoesHoje = _historicoPlantoes.where(
+      (p) =>
+          p.hora.day == hoje.day &&
+          p.hora.month == hoje.month &&
+          p.hora.year == hoje.year,
+    );
+    final plantoesMes = _historicoPlantoes.where(
+      (p) => p.hora.month == hoje.month && p.hora.year == hoje.year,
+    );
+
+    final qtdHoje = plantoesHoje.length;
+    final receitaHoje = plantoesHoje.fold(0.0, (s, p) => s + p.valorTotal);
+    final qtdMes = plantoesMes.length;
+    final receitaMes = plantoesMes.fold(0.0, (s, p) => s + p.valorTotal);
+
+    return Container(
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.schedule_outlined, size: 20, color: Colors.black87),
+              SizedBox(width: 8),
+              Text(
+                'Registro de Plantões',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(
+                0xFFF8F9FA,
+              ), // Cor de fundo suave idêntica à imagem
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Checkbox(
+                        value: _chamei5Pacientes,
+                        onChanged: (val) {
+                          setState(() => _chamei5Pacientes = val ?? false);
+                        },
+                        activeColor: temaAtual.cor1,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Chamei 5 pacientes por hora (R\$ 100,00 )',
+                        style: TextStyle(fontSize: 13, color: Colors.black87),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Pacientes adicionais (R\$ 7,00 cada)',
+                  style: TextStyle(fontSize: 13, color: Colors.black87),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _pacientesAdicionaisController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: '0',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: _registrarPlantao,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.black87,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('Registrar Plantão'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          _buildResumoPlantaoRow('Plantões hoje:', qtdHoje.toString()),
+          const SizedBox(height: 12),
+          _buildResumoPlantaoRow(
+            'Receita hoje:',
+            'R\$ ${receitaHoje.toStringAsFixed(2).replaceAll('.', ',')}',
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Divider(height: 1, thickness: 1, color: Colors.black12),
+          ),
+          _buildResumoPlantaoRow('Plantões no mês:', qtdMes.toString()),
+          const SizedBox(height: 12),
+          _buildResumoPlantaoRow(
+            'Receita mensal:',
+            'R\$ ${receitaMes.toStringAsFixed(2).replaceAll('.', ',')}',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResumoPlantaoRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+        ),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+      ],
+    );
+  }
 
   // Adicionar nova consulta manualmente ao painel
   void _registrarConsulta(String nomeConvenio, double valor) {
@@ -1294,23 +1897,62 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   // Contadores por categoria
-  int get totalConsultasHoje => _historicoConsultas.length;
+  int get totalConsultasHoje {
+    final hoje = DateTime.now();
+    return _historicoConsultas.where((c) {
+      return c.hora.day == hoje.day &&
+          c.hora.month == hoje.month &&
+          c.hora.year == hoje.year;
+    }).length;
+  }
 
-  int totalPorFila(String nomeConvenio) {
-    return _historicoConsultas
-        .where((c) => c.nomeConvenio == nomeConvenio)
-        .length;
+  int totalPorFilaHoje(String nomeConvenio) {
+    final hoje = DateTime.now();
+    return _historicoConsultas.where((c) {
+      return c.nomeConvenio == nomeConvenio &&
+          c.hora.day == hoje.day &&
+          c.hora.month == hoje.month &&
+          c.hora.year == hoje.year;
+    }).length;
   }
 
   // Soma de faturamento bruto
   double get receitaHojeBruta {
-    return _historicoConsultas.fold(0.0, (soma, item) => soma + item.valor);
+    final hoje = DateTime.now();
+    final consultasDeHoje = _historicoConsultas.where((c) {
+      return c.hora.day == hoje.day &&
+          c.hora.month == hoje.month &&
+          c.hora.year == hoje.year;
+    });
+    return consultasDeHoje.fold(0.0, (soma, item) => soma + item.valor);
+  }
+
+  double get receitaMesBruta {
+    final hoje = DateTime.now();
+    return _historicoConsultas
+        .where((c) {
+          return c.hora.year == hoje.year && c.hora.month == hoje.month;
+        })
+        .fold(0.0, (soma, item) => soma + item.valor);
+  }
+
+  int get totalConsultasMes {
+    final hoje = DateTime.now();
+    return _historicoConsultas.where((c) {
+      return c.hora.year == hoje.year && c.hora.month == hoje.month;
+    }).length;
   }
 
   // Horas ativas com base nos registros distintos
   int get horasAtivas {
-    final horasUnicas = _historicoConsultas.map((c) => c.hora.hour).toSet();
-    return horasUnicas.isEmpty ? 1 : horasUnicas.length;
+    final hoje = DateTime.now();
+    final consultasDeHoje = _historicoConsultas.where((c) {
+      return c.hora.day == hoje.day &&
+          c.hora.month == hoje.month &&
+          c.hora.year == hoje.year;
+    });
+    final horasUnicas = consultasDeHoje.map((c) => c.hora.hour).toSet();
+    return horasUnicas.length;
   }
 
   // Média de atendimentos por hora
@@ -1319,13 +1961,13 @@ class _DashboardPageState extends State<DashboardPage> {
     return totalConsultasHoje / horasAtivas;
   }
 
-  // Filtros por faixa horária para construir o gráfico dinamicamente
-  int contagemPorFaixaHoraria(int horaInicio) {
-    return _historicoConsultas.where((c) => c.hora.hour == horaInicio).length;
-  }
-
-  String detalhesPorFaixaHoraria(int horaInicio) {
-    final itens = _historicoConsultas.where((c) => c.hora.hour == horaInicio);
+  String detalhesPorFaixaHoraria(int horaInicio, DateTime data) {
+    final itens = _historicoConsultas.where((c) {
+      return c.hora.hour == horaInicio &&
+          c.hora.day == data.day &&
+          c.hora.month == data.month &&
+          c.hora.year == data.year;
+    });
     if (itens.isEmpty) return "Nenhum atendimento";
 
     final Map<String, int> contagemPorFila = {};
@@ -1345,13 +1987,20 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     // Regra do imposto de 15,8% vista nas imagens e vídeos
-    double descontoImposto = receitaHojeBruta * taxaDesconto;
-    double receitaLiquida = receitaHojeBruta - descontoImposto;
+    final receitaBrutaMensal = receitaMesBruta;
+    double descontoImpostoMensal = receitaBrutaMensal * taxaDesconto;
+    double receitaLiquidaMensal = receitaBrutaMensal - descontoImpostoMensal;
 
     // --- LÓGICA DINÂMICA PARA GRÁFICO DE DISTRIBUIÇÃO HORÁRIA ---
-    // 1. Agrupa todas as consultas pela hora em que ocorreram.
+    // 1. Agrupa as consultas do DIA SELECIONADO pela hora em que ocorreram.
     final Map<int, List<ConsultaRegistro>> consultasPorHora = {};
-    for (final consulta in _historicoConsultas) {
+    final consultasDoDiaSelecionado = _historicoConsultas.where(
+      (c) =>
+          c.hora.day == _analiseDataSelecionada.day &&
+          c.hora.month == _analiseDataSelecionada.month &&
+          c.hora.year == _analiseDataSelecionada.year,
+    );
+    for (final consulta in consultasDoDiaSelecionado) {
       consultasPorHora.putIfAbsent(consulta.hora.hour, () => []).add(consulta);
     }
 
@@ -1372,343 +2021,344 @@ class _DashboardPageState extends State<DashboardPage> {
     // Detectar orientação e tamanho da tela
     final isMobile = MediaQuery.of(context).size.width < 600;
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: Text(
-          'Controle Telemedicina',
-          style: TextStyle(
-            color: temaAtual.cor1,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          title: Text(
+            'Controle Telemedicina',
+            style: TextStyle(
+              color: temaAtual.cor1,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Tooltip(
+                message: 'Escolher Tema',
+                child: GestureDetector(
+                  onTap: () => _mostrarSeletorTema(context),
+                  child: CircleAvatar(
+                    backgroundColor: temaAtual.cor1,
+                    child: const Icon(
+                      Icons.palette_outlined,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Tooltip(
+                message:
+                    'Sincronização: ${_server == null ? 'Inativa' : 'Ativa'}',
+                child: GestureDetector(
+                  onTap: () => _mostrarMenuBackup(context),
+                  child: CircleAvatar(
+                    backgroundColor: _server == null
+                        ? const Color.fromARGB(255, 243, 33, 96)
+                        : Colors.green,
+                    child: Icon(
+                      _server == null
+                          ? Icons.sync_disabled_outlined
+                          : Icons.cloud_sync_outlined,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Tooltip(
+                message: 'Exportar PDF do Mês',
+                child: GestureDetector(
+                  onTap: _exportarRelatorioMensalPDF,
+                  child: const CircleAvatar(
+                    backgroundColor: Colors.redAccent,
+                    child: Icon(
+                      Icons.picture_as_pdf_outlined,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          bottom: TabBar(
+            indicatorColor: temaAtual.cor1,
+            labelColor: temaAtual.cor1,
+            unselectedLabelColor: Colors.grey,
+            tabs: const [
+              Tab(icon: Icon(Icons.dashboard_outlined), text: 'Dashboard'),
+              Tab(icon: Icon(Icons.analytics_outlined), text: 'Análise'),
+            ],
           ),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Tooltip(
-              message: 'Escolher Tema',
-              child: GestureDetector(
-                onTap: () => _mostrarSeletorTema(context),
-                child: CircleAvatar(
-                  backgroundColor: temaAtual.cor1,
-                  child: const Icon(
-                    Icons.palette,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Tooltip(
-              message:
-                  'Sincronização: ${_server == null ? 'Inativa' : 'Ativa'}',
-              child: GestureDetector(
-                onTap: () => _mostrarMenuBackup(context),
-                child: CircleAvatar(
-                  backgroundColor: _server == null
-                      ? const Color.fromARGB(255, 243, 33, 96)
-                      : Colors.green,
-                  child: Icon(
-                    _server == null ? Icons.sync : Icons.sync_lock,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Tooltip(
-              message: 'Exportar PDF do Mês',
-              child: GestureDetector(
-                onTap: _exportarRelatorioMensalPDF,
-                child: const CircleAvatar(
-                  backgroundColor: Colors.redAccent,
-                  child: Icon(
-                    Icons.picture_as_pdf,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // HEADER COM IP E STATUS
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(isMobile ? 12 : 16),
-                decoration: BoxDecoration(
-                  color: temaAtual.cor1.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: temaAtual.cor1.withOpacity(0.3)),
-                ),
+        body: TabBarView(
+          children: [
+            // --- TAB 1: DASHBOARD ---
+            SafeArea(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: temaAtual.cor1),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Seu IP: ${meuIpLocal ?? "Buscando..."}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: temaAtual.cor2,
-                            ),
-                          ),
+                    // HEADER COM IP E STATUS
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(isMobile ? 12 : 16),
+                      decoration: BoxDecoration(
+                        color: temaAtual.cor1.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: temaAtual.cor1.withOpacity(0.3),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Clique no ícone de paleta (canto superior) para escolher tema de cores',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // GRID RESPONSIVO DE METRICAS FINANCEIRAS
-              if (isMobile)
-                Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildMetricCard(
-                            'Consultas Hoje',
-                            '$totalConsultasHoje',
-                            'pacientes',
-                            Icons.people,
-                            isMobile,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _buildMetricCard(
-                            'Receita Hoje',
-                            'R\$ ${receitaHojeBruta.toStringAsFixed(2).replaceAll('.', ',')}',
-                            'consultas do dia',
-                            Icons.attach_money,
-                            isMobile,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildMetricCard(
-                            'Consultas Mês',
-                            '$totalConsultasHoje',
-                            'acumulado',
-                            Icons.calendar_today,
-                            isMobile,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _buildMetricCard(
-                            'Receita Bruta',
-                            'R\$ ${receitaHojeBruta.toStringAsFixed(2).replaceAll('.', ',')}',
-                            'antes impostos',
-                            Icons.account_balance_wallet,
-                            isMobile,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                )
-              else
-                // Mantém o Wrap para telas maiores
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMetricCard(
-                        'Consultas Hoje',
-                        '$totalConsultasHoje',
-                        'pacientes',
-                        Icons.people,
-                        isMobile,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMetricCard(
-                        'Receita Hoje',
-                        'R\$ ${receitaHojeBruta.toStringAsFixed(2).replaceAll('.', ',')}',
-                        'consultas do dia',
-                        Icons.attach_money,
-                        isMobile,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMetricCard(
-                        'Consultas Mês',
-                        '$totalConsultasHoje',
-                        'acumulado',
-                        Icons.calendar_today,
-                        isMobile,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMetricCard(
-                        'Receita Bruta',
-                        'R\$ ${receitaHojeBruta.toStringAsFixed(2).replaceAll('.', ',')}',
-                        'antes impostos',
-                        Icons.account_balance_wallet,
-                        isMobile,
-                      ),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 16),
-
-              // CARD DE RECEITA LÍQUIDA
-              Container(
-                padding: EdgeInsets.all(isMobile ? 12 : 16),
-                decoration: BoxDecoration(
-                  color: temaAtual.fundoBatida,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: temaAtual.cor1.withOpacity(0.3)),
-                ),
-                child: isMobile
-                    ? Column(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Receita Líquida Mensal',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: temaAtual.cor2,
-                              fontSize: 13,
-                            ),
-                          ),
-                          Text(
-                            'Após desconto de ${(taxaDesconto * 100).toStringAsFixed(1)}% de impostos',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: temaAtual.cor2,
-                            ),
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline, color: temaAtual.cor1),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Seu IP: ${meuIpLocal ?? "Buscando..."}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: temaAtual.cor2,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'R\$ ${receitaLiquida.toStringAsFixed(2).replaceAll('.', ',')}',
+                            'Clique no ícone de paleta (canto superior) para escolher tema de cores',
                             style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: temaAtual.cor2,
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
                             ),
-                          ),
-                          Text(
-                            '(desconto: R\$ ${descontoImposto.toStringAsFixed(2).replaceAll('.', ',')})',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: temaAtual.cor2,
-                            ),
-                          ),
-                        ],
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Receita Líquida Mensal',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: temaAtual.cor2,
-                                ),
-                              ),
-                              Text(
-                                'Após desconto de ${(taxaDesconto * 100).toStringAsFixed(1)}% de impostos',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: temaAtual.cor2,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                'R\$ ${receitaLiquida.toStringAsFixed(2).replaceAll('.', ',')}',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: temaAtual.cor2,
-                                ),
-                              ),
-                              Text(
-                                '(desconto: R\$ ${descontoImposto.toStringAsFixed(2).replaceAll('.', ',')})',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: temaAtual.cor2,
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),
-              ),
-              const SizedBox(height: 24),
+                    ),
+                    const SizedBox(height: 20),
 
-              const Text(
-                '🎯 Progresso das Metas',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              isMobile
-                  ? Column(
-                      children: [
-                        _buildProgressCard(
-                          'Meta Diária',
-                          receitaHojeBruta,
-                          metaDiaria,
+                    // GRID RESPONSIVO DE METRICAS FINANCEIRAS
+                    if (isMobile)
+                      Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildMetricCard(
+                                  'Consultas Hoje',
+                                  '$totalConsultasHoje',
+                                  'pacientes',
+                                  Icons.groups_outlined,
+                                  isMobile,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildMetricCard(
+                                  'Receita Hoje',
+                                  'R\$ ${receitaHojeBruta.toStringAsFixed(2).replaceAll('.', ',')}',
+                                  'consultas do dia',
+                                  Icons.monetization_on_outlined,
+                                  isMobile,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildMetricCard(
+                                  'Consultas Mês',
+                                  '$totalConsultasMes',
+                                  'acumulado',
+                                  Icons.calendar_today_outlined,
+                                  isMobile,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildMetricCard(
+                                  'Receita Bruta',
+                                  'R\$ ${receitaMesBruta.toStringAsFixed(2).replaceAll('.', ',')}',
+                                  'antes impostos',
+                                  Icons.account_balance_wallet_outlined,
+                                  isMobile,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      )
+                    else
+                      // Mantém o Wrap para telas maiores
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildMetricCard(
+                              'Consultas Hoje',
+                              '$totalConsultasHoje',
+                              'pacientes',
+                              Icons.groups_outlined,
+                              isMobile,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildMetricCard(
+                              'Receita Hoje',
+                              'R\$ ${receitaHojeBruta.toStringAsFixed(2).replaceAll('.', ',')}',
+                              'consultas do dia',
+                              Icons.monetization_on_outlined,
+                              isMobile,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildMetricCard(
+                              'Consultas Mês',
+                              '$totalConsultasMes',
+                              'acumulado',
+                              Icons.calendar_today_outlined,
+                              isMobile,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildMetricCard(
+                              'Receita Bruta',
+                              'R\$ ${receitaMesBruta.toStringAsFixed(2).replaceAll('.', ',')}',
+                              'antes impostos',
+                              Icons.account_balance_wallet_outlined,
+                              isMobile,
+                            ),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 16),
+
+                    // CARD DE RECEITA LÍQUIDA
+                    Container(
+                      padding: EdgeInsets.all(isMobile ? 12 : 16),
+                      decoration: BoxDecoration(
+                        color: temaAtual.fundoBatida,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: temaAtual.cor1.withOpacity(0.3),
                         ),
-                        const SizedBox(height: 12),
-                        _buildProgressCard(
-                          'Meta Mensal',
-                          receitaHojeBruta,
-                          metaMensal,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildMetaEditor(isMobile),
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: Column(
+                      ),
+                      child: isMobile
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Receita Líquida Mensal',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: temaAtual.cor2,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                Text(
+                                  'Após desconto de ${(taxaDesconto * 100).toStringAsFixed(1)}% de impostos',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: temaAtual.cor2,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'R\$ ${receitaLiquidaMensal.toStringAsFixed(2).replaceAll('.', ',')}',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: temaAtual.cor2,
+                                  ),
+                                ),
+                                Text(
+                                  '(desconto: R\$ ${descontoImpostoMensal.toStringAsFixed(2).replaceAll('.', ',')})',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: temaAtual.cor2,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Receita Líquida Mensal',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: temaAtual.cor2,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Após desconto de ${(taxaDesconto * 100).toStringAsFixed(1)}% de impostos',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: temaAtual.cor2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'R\$ ${receitaLiquidaMensal.toStringAsFixed(2).replaceAll('.', ',')}',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: temaAtual.cor2,
+                                      ),
+                                    ),
+                                    Text(
+                                      '(desconto: R\$ ${descontoImpostoMensal.toStringAsFixed(2).replaceAll('.', ',')})',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: temaAtual.cor2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    const Text(
+                      '🎯 Progresso das Metas',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    isMobile
+                        ? Column(
                             children: [
                               _buildProgressCard(
                                 'Meta Diária',
@@ -1718,310 +2368,244 @@ class _DashboardPageState extends State<DashboardPage> {
                               const SizedBox(height: 12),
                               _buildProgressCard(
                                 'Meta Mensal',
-                                receitaHojeBruta,
+                                receitaMesBruta,
                                 metaMensal,
+                              ),
+                              const SizedBox(height: 16),
+                              _buildMetaEditor(isMobile),
+                              const SizedBox(height: 24),
+                              // CARD de Registro de Plantões movido para cá no mobile
+                              _buildRegistroPlantoesCard(isMobile),
+                            ],
+                          )
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: Column(
+                                  children: [
+                                    _buildProgressCard(
+                                      'Meta Diária',
+                                      receitaHojeBruta,
+                                      metaDiaria,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _buildProgressCard(
+                                      'Meta Mensal',
+                                      receitaMesBruta,
+                                      metaMensal,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 1,
+                                child: _buildMetaEditor(isMobile),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 2,
+                                child: _buildRegistroPlantoesCard(isMobile),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(flex: 1, child: _buildMetaEditor(isMobile)),
-                      ],
-                    ),
-              const SizedBox(height: 24),
-              // LANÇAR ATENDIMENTOS
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    '📋 Lançar Atendimentos',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.edit, size: 18, color: temaAtual.cor2),
-                    tooltip: 'Gerenciar Filas',
-                    onPressed: () => _mostrarGerenciadorConvenios(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _convenios.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: isMobile ? 2 : 4,
-                  crossAxisSpacing: isMobile ? 8 : 12,
-                  mainAxisSpacing: isMobile ? 8 : 12,
-                  // Ajusta a proporção do card. Um valor > 1 o torna mais largo.
-                  childAspectRatio: 1.25,
-                ),
-                itemBuilder: (context, index) {
-                  final convenio = _convenios[index];
-                  return _buildConvenioCard(
-                    convenio.nome,
-                    '${totalPorFila(convenio.nome)}',
-                    'R\$ ${convenio.valor.toStringAsFixed(2)}',
-                    convenio.cor,
-                    () => _registrarConsulta(convenio.nome, convenio.valor),
-                    isMobile,
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
-
-              // LAYOUT DOS GRÁFICOS (RESPONSIVO)
-              if (isMobile)
-                // Layout em Coluna para Celular (Faturamento abaixo da Pizza)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildPieChartSection(isMobile),
                     const SizedBox(height: 24),
-                    _buildRevenueChartSection(isMobile),
-                    const SizedBox(height: 24),
-                    _buildHourlyChartSection(
-                      isMobile,
-                      horasComAtendimento,
-                      consultasPorHora,
-                      maxConsultasNaHora,
-                    ),
-                  ],
-                )
-              else
-                // Layout em Linha para Telas Maiores (Faturamento ao lado da Pizza)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                    // LANÇAR ATENDIMENTOS
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(
-                          flex: 1,
-                          child: _buildPieChartSection(isMobile),
+                        const Text(
+                          '📋 Lançar Atendimentos',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          flex: 1,
-                          child: _buildRevenueChartSection(isMobile),
+                        IconButton(
+                          icon: Icon(
+                            Icons.edit_outlined,
+                            size: 18,
+                            color: temaAtual.cor2,
+                          ),
+                          tooltip: 'Gerenciar Filas',
+                          onPressed: () =>
+                              _mostrarGerenciadorConvenios(context),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
-                    _buildHourlyChartSection(
-                      isMobile,
-                      horasComAtendimento,
-                      consultasPorHora,
-                      maxConsultasNaHora,
+                    const SizedBox(height: 10),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _convenios.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: isMobile ? 2 : 4,
+                        crossAxisSpacing: isMobile ? 8 : 12,
+                        mainAxisSpacing: isMobile ? 8 : 12,
+                        // Ajusta a proporção do card. Um valor > 1 o torna mais largo.
+                        childAspectRatio: 1.25,
+                      ),
+                      itemBuilder: (context, index) {
+                        final convenio = _convenios[index];
+                        return _buildConvenioCard(
+                          convenio.nome,
+                          '${totalPorFilaHoje(convenio.nome)}',
+                          'R\$ ${convenio.valor.toStringAsFixed(2)}',
+                          convenio.cor,
+                          () =>
+                              _registrarConsulta(convenio.nome, convenio.valor),
+                          isMobile,
+                        );
+                      },
                     ),
+                    const SizedBox(height: 24),
+
+                    // ÚLTIMOS LANÇAMENTOS
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          '⏱️ Últimos Lançamentos',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (_historicoConsultas.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: _zerarHistorico,
+                            icon: const Icon(
+                              Icons.delete_sweep_outlined,
+                              size: 18,
+                            ),
+                            label: const Text('Zerar'),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: _historicoConsultas.isEmpty
+                          ? const Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Text("Nenhuma consulta lançada."),
+                            )
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: _historicoConsultas.length > 5
+                                  ? 5
+                                  : _historicoConsultas.length,
+                              itemBuilder: (context, index) {
+                                final item = _historicoConsultas[index];
+                                return ListTile(
+                                  leading: const Icon(
+                                    Icons.check_circle_outline,
+                                    color: Colors.green,
+                                    size: 20,
+                                  ),
+                                  title: Text(
+                                    item.nomeConvenio,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  subtitle: Text(
+                                    'R\$ ${item.valor.toStringAsFixed(2)}',
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '${item.hora.hour.toString().padLeft(2, '0')}:${item.hora.minute.toString().padLeft(2, '0')}',
+                                        style: const TextStyle(fontSize: 11),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          size: 18,
+                                          color: Colors.red,
+                                        ),
+                                        onPressed: () =>
+                                            _removerRegistro(index),
+                                        tooltip: 'Remover registro',
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 24),
                   ],
                 ),
-              const SizedBox(height: 24),
-
-              // ÚLTIMOS LANÇAMENTOS
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    '⏱️ Últimos Lançamentos',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  if (_historicoConsultas.isNotEmpty)
-                    TextButton.icon(
-                      onPressed: _zerarHistorico,
-                      icon: const Icon(Icons.delete_sweep, size: 18),
-                      label: const Text('Zerar'),
-                    ),
-                ],
               ),
-              const SizedBox(height: 10),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: _historicoConsultas.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: Text("Nenhuma consulta lançada."),
+            ),
+
+            // --- TAB 2: ANÁLISE ---
+            SafeArea(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // NOVO: Seletor de data para os gráficos diários
+                    _buildAnaliseDatePicker(),
+                    const SizedBox(height: 16),
+
+                    // LAYOUT DOS GRÁFICOS (RESPONSIVO)
+                    if (isMobile)
+                      // Layout em Coluna para Celular (Faturamento abaixo da Pizza)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildPieChartSection(isMobile),
+                          const SizedBox(height: 24),
+                          _buildRevenueChartSection(isMobile),
+                          const SizedBox(height: 24),
+                          _buildHourlyChartSection(
+                            isMobile,
+                            horasComAtendimento,
+                            consultasPorHora,
+                            maxConsultasNaHora,
+                          ),
+                        ],
                       )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _historicoConsultas.length > 5
-                            ? 5
-                            : _historicoConsultas.length,
-                        itemBuilder: (context, index) {
-                          final item = _historicoConsultas[index];
-                          return ListTile(
-                            leading: const Icon(
-                              Icons.check_circle_outline,
-                              color: Colors.green,
-                              size: 20,
-                            ),
-                            title: Text(
-                              item.nomeConvenio,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            subtitle: Text(
-                              'R\$ ${item.valor.toStringAsFixed(2)}',
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '${item.hora.hour.toString().padLeft(2, '0')}:${item.hora.minute.toString().padLeft(2, '0')}',
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.delete,
-                                    size: 18,
-                                    color: Colors.red,
-                                  ),
-                                  onPressed: () => _removerRegistro(index),
-                                  tooltip: 'Remover registro',
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                    else
+                      // Layout em Linha para Telas Maiores (Faturamento ao lado da Pizza)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 1,
+                                child: _buildPieChartSection(isMobile),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                flex: 1,
+                                child: _buildRevenueChartSection(isMobile),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          _buildHourlyChartSection(
+                            isMobile,
+                            horasComAtendimento,
+                            consultasPorHora,
+                            maxConsultasNaHora,
+                          ),
+                        ],
                       ),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- LÓGICA E WIDGET PARA GRÁFICO DE LINHA ---
-  Map<int, double> _getReceitaUltimos7Dias() {
-    final Map<int, double> receitaPorDia = {};
-    final agora = DateTime.now();
-
-    for (int i = 0; i < 7; i++) {
-      // i = 0 é hoje, i = 1 é ontem, etc.
-      final diaAlvo = DateTime(agora.year, agora.month, agora.day - i);
-      double receitaDoDia = 0.0;
-
-      for (var consulta in _historicoConsultas) {
-        final diaConsulta = DateTime(
-          consulta.hora.year,
-          consulta.hora.month,
-          consulta.hora.day,
-        );
-        // Usando isAtSameMomentAs para comparar apenas a data
-        if (diaConsulta.isAtSameMomentAs(diaAlvo)) {
-          receitaDoDia += consulta.valor;
-        }
-      }
-      // Armazena com a chave invertida para o gráfico (0 = 6 dias atrás, 6 = hoje)
-      receitaPorDia[6 - i] = receitaDoDia;
-    }
-    return receitaPorDia;
-  }
-
-  Widget _buildDailyRevenueChartSection() {
-    final dadosReceita = _getReceitaUltimos7Dias();
-    final List<FlSpot> spots = dadosReceita.entries
-        .map((entry) => FlSpot(entry.key.toDouble(), entry.value))
-        .toList();
-
-    if (_historicoConsultas.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Text(
-          'Nenhum atendimento registrado para exibir o gráfico.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
-    }
-
-    return AspectRatio(
-      aspectRatio: 1.7,
-      child: LineChart(
-        LineChartData(
-          lineTouchData: LineTouchData(
-            touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (touchedSpots) => temaAtual.cor2,
-              getTooltipItems: (List<LineBarSpot> touchedSpots) {
-                return touchedSpots.map((barSpot) {
-                  final flSpot = barSpot;
-                  if (flSpot.x == -1 || flSpot.y == -1) {
-                    return null;
-                  }
-                  return LineTooltipItem(
-                    'R\$ ${flSpot.y.toStringAsFixed(2)}\n',
-                    const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  );
-                }).toList();
-              },
-            ),
-          ),
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: true,
-            getDrawingHorizontalLine: (value) =>
-                FlLine(color: Colors.grey.shade200, strokeWidth: 1),
-            getDrawingVerticalLine: (value) =>
-                FlLine(color: Colors.grey.shade200, strokeWidth: 1),
-          ),
-          titlesData: FlTitlesData(
-            leftTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 30,
-                interval: 1,
-                getTitlesWidget: (value, meta) {
-                  final dia = DateTime.now().subtract(
-                    Duration(days: 6 - value.toInt()),
-                  );
-                  return SideTitleWidget(
-                    axisSide: meta.axisSide,
-                    child: Text(
-                      '${dia.day}/${dia.month}',
-                      style: const TextStyle(fontSize: 10),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          borderData: FlBorderData(
-            show: true,
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          minX: 0,
-          maxX: 6,
-          minY: 0,
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              color: temaAtual.cor1,
-              barWidth: 4,
-              isStrokeCapRound: true,
-              dotData: const FlDotData(show: true),
-              belowBarData: BarAreaData(
-                show: true,
-                color: temaAtual.cor1.withOpacity(0.2),
+                  ],
+                ),
               ),
             ),
           ],
@@ -2030,109 +2614,69 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void _mostrarSeletorTema(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                '🎨 Escolher Tema de Cores',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: temasPredefinidos.entries.map((entry) {
-                  final key = entry.key;
-                  final tema = entry.value;
-                  final selecionado = key == _temaSelecionado;
+  // --- LÓGICA E WIDGETS PARA GRÁFICOS ---
 
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _temaSelecionado = key;
-                      });
-                      _salvarDados();
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('✅ Tema ${tema.nome} selecionado!'),
-                          backgroundColor: tema.cor1,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      width: 140,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: tema.fundoBatida,
-                        border: Border.all(
-                          color: selecionado ? tema.cor1 : Colors.grey.shade300,
-                          width: selecionado ? 3 : 1,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              color: tema.cor1,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            tema.nome,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: tema.cor2,
-                              fontSize: 14,
-                            ),
-                          ),
-                          if (selecionado)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Icon(Icons.check_circle, color: tema.cor1),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
+  // NOVO: Contador para uma data específica
+  int _getTotalConsultasParaData(DateTime data) {
+    return _historicoConsultas.where((c) {
+      return c.hora.day == data.day &&
+          c.hora.month == data.month &&
+          c.hora.year == data.year;
+    }).length;
+  }
+
+  // NOVO: Horas ativas para uma data específica
+  int _getHorasAtivasParaData(DateTime data) {
+    final consultasDoDia = _historicoConsultas.where((c) {
+      return c.hora.day == data.day &&
+          c.hora.month == data.month &&
+          c.hora.year == data.year;
+    });
+    final horasUnicas = consultasDoDia.map((c) => c.hora.hour).toSet();
+    return horasUnicas.length;
+  }
+
+  // NOVO: Média por hora para uma data específica
+  double _getMediaHoraParaData(DateTime data) {
+    final horasAtivas = _getHorasAtivasParaData(data);
+    if (horasAtivas == 0) return 0.0;
+    return _getTotalConsultasParaData(data) / horasAtivas;
+  }
+
+  Future<void> _selecionarDataAnalise() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _analiseDataSelecionada,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: 'SELECIONAR DIA DA ANÁLISE',
+      cancelText: 'CANCELAR',
+      confirmText: 'OK',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: temaAtual.cor1, // header background color
+              onPrimary: Colors.white, // header text color
+              onSurface: temaAtual.cor2, // body text color
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: temaAtual.cor1, // button text color
               ),
-              const SizedBox(height: 24),
-            ],
+            ),
           ),
+          child: child!,
         );
       },
     );
-  }
 
-  // --- LÓGICA E WIDGETS PARA GRÁFICOS ---
+    if (picked != null && picked != _analiseDataSelecionada) {
+      setState(() {
+        _analiseDataSelecionada = picked;
+      });
+    }
+  }
 
   Future<void> _selectDateRange() async {
     final picked = await showDateRangePicker(
@@ -2159,6 +2703,30 @@ class _DashboardPageState extends State<DashboardPage> {
         );
       });
     }
+  }
+
+  Widget _buildAnaliseDatePicker() {
+    final formattedDate =
+        '${_analiseDataSelecionada.day.toString().padLeft(2, '0')}/${_analiseDataSelecionada.month.toString().padLeft(2, '0')}/${_analiseDataSelecionada.year}';
+    final isHoje =
+        _analiseDataSelecionada.day == DateTime.now().day &&
+        _analiseDataSelecionada.month == DateTime.now().month &&
+        _analiseDataSelecionada.year == DateTime.now().year;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Dados de: ${isHoje ? 'Hoje' : formattedDate}',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        IconButton(
+          icon: Icon(Icons.calendar_month_outlined, color: temaAtual.cor2),
+          tooltip: 'Selecionar Outro Dia',
+          onPressed: _selecionarDataAnalise,
+        ),
+      ],
+    );
   }
 
   Map<DateTime, double> _getReceitaPorPeriodo(DateTime start, DateTime end) {
@@ -2332,7 +2900,11 @@ class _DashboardPageState extends State<DashboardPage> {
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
             IconButton(
-              icon: Icon(Icons.calendar_today, size: 18, color: temaAtual.cor2),
+              icon: Icon(
+                Icons.calendar_today_outlined,
+                size: 18,
+                color: temaAtual.cor2,
+              ),
               tooltip: 'Selecionar Período',
               onPressed: _selectDateRange,
             ),
@@ -2391,7 +2963,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               children: [
                                 IconButton(
                                   icon: const Icon(
-                                    Icons.edit,
+                                    Icons.edit_outlined,
                                     color: Colors.blue,
                                   ),
                                   onPressed: () {
@@ -2410,7 +2982,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 ),
                                 IconButton(
                                   icon: const Icon(
-                                    Icons.delete,
+                                    Icons.delete_outline,
                                     color: Colors.red,
                                   ),
                                   onPressed: () {
@@ -2433,7 +3005,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.add),
+                      icon: const Icon(Icons.add_circle_outline),
                       label: const Text('Adicionar Nova Fila'),
                       onPressed: () {
                         _editarConvenio(context, null, (newConvenio) {
@@ -2577,6 +3149,106 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  void _mostrarSeletorTema(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Escolher Tema',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: temaAtual.cor2,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: temasPredefinidos.entries.map((entry) {
+                  final tema = entry.value;
+                  final isSelected = entry.key == _temaSelecionado;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _temaSelecionado = entry.key;
+                      });
+                      _salvarDados();
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      width: 140,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: tema.fundoBatida,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? tema.cor1 : Colors.grey.shade300,
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: tema.cor1,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            tema.nome,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: tema.cor2,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${tema.cor1.value.toRadixString(16).toUpperCase()}',
+                            style: TextStyle(fontSize: 11, color: tema.cor2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Fechar'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _mostrarMenuBackup(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
 
@@ -2632,9 +3304,9 @@ class _DashboardPageState extends State<DashboardPage> {
                   unselectedLabelColor: Colors.grey,
                   indicatorColor: temaAtual.cor1,
                   tabs: const [
-                    Tab(icon: Icon(Icons.dns), text: 'Servidor'),
-                    Tab(icon: Icon(Icons.sync), text: 'Sincronizar'),
-                    Tab(icon: Icon(Icons.backup), text: 'Backup'),
+                    Tab(icon: Icon(Icons.dns_outlined), text: 'Servidor'),
+                    Tab(icon: Icon(Icons.sync_alt), text: 'Sincronizar'),
+                    Tab(icon: Icon(Icons.backup_outlined), text: 'Backup'),
                   ],
                 ),
 
@@ -2702,7 +3374,9 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Row(
               children: [
                 Icon(
-                  _server == null ? Icons.sync_disabled : Icons.sync_lock,
+                  _server == null
+                      ? Icons.cloud_off_outlined
+                      : Icons.cloud_sync_outlined,
                   color: _server == null
                       ? Colors.orange.shade700
                       : Colors.green.shade700,
@@ -2750,7 +3424,7 @@ class _DashboardPageState extends State<DashboardPage> {
               },
               icon: Icon(
                 _server == null
-                    ? Icons.power_settings_new
+                    ? Icons.power_settings_new_outlined
                     : Icons.stop_circle_outlined,
               ),
               label: Text(
@@ -2808,7 +3482,7 @@ class _DashboardPageState extends State<DashboardPage> {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
-              prefixIcon: const Icon(Icons.devices),
+              prefixIcon: const Icon(Icons.devices_outlined),
             ),
           ),
 
@@ -2827,7 +3501,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 const PopupMenuItem<String>(
                   value: 'push',
                   child: ListTile(
-                    leading: Icon(Icons.upload),
+                    leading: Icon(Icons.upload_outlined),
                     title: Text('Enviar Dados'),
                     subtitle: Text('Sobrescreve os dados do outro aparelho'),
                   ),
@@ -2835,7 +3509,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 const PopupMenuItem<String>(
                   value: 'pull',
                   child: ListTile(
-                    leading: Icon(Icons.download),
+                    leading: Icon(Icons.download_outlined),
                     title: Text('Receber Dados'),
                     subtitle: Text('Sobrescreve os dados deste aparelho'),
                   ),
@@ -2843,7 +3517,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ],
               child: ElevatedButton.icon(
                 onPressed: null, // O PopupMenuButton cuida do clique
-                icon: const Icon(Icons.sync),
+                icon: const Icon(Icons.sync_alt),
                 label: const Text('Sincronizar...'),
                 style: ElevatedButton.styleFrom(
                   disabledBackgroundColor: temaAtual.cor1.withOpacity(0.8),
@@ -2902,7 +3576,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 itemBuilder: (context, index) {
                   final service = _discoveredServices[index];
                   return ListTile(
-                    leading: const Icon(Icons.devices_other),
+                    leading: const Icon(Icons.devices_other_outlined),
                     title: Text(service.name ?? 'Dispositivo'),
                     subtitle: Text('${service.host}:${service.port}'),
                     onTap: () {
@@ -2984,7 +3658,7 @@ class _DashboardPageState extends State<DashboardPage> {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: _exportarParaArquivoJson,
-              icon: const Icon(Icons.download),
+              icon: const Icon(Icons.download_outlined),
               label: const Text('Exportar Dados (JSON)'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: temaAtual.cor2,
@@ -2998,7 +3672,7 @@ class _DashboardPageState extends State<DashboardPage> {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: _importarDeArquivoJson,
-              icon: const Icon(Icons.upload_file),
+              icon: const Icon(Icons.upload_file_outlined),
               label: const Text('Importar de Arquivo (.json)'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: temaAtual.cor2,
@@ -3264,7 +3938,7 @@ class _DashboardPageState extends State<DashboardPage> {
         labelText: 'Porta',
         border: const OutlineInputBorder(),
         suffixIcon: IconButton(
-          icon: const Icon(Icons.save, size: 20),
+          icon: const Icon(Icons.save_outlined, size: 20),
           tooltip: 'Salvar Porta',
           onPressed: () {
             final novaPorta = int.tryParse(_syncPortController.text);
@@ -3287,11 +3961,19 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildPieChartSection(bool isMobile) {
+    final isHoje =
+        _analiseDataSelecionada.day == DateTime.now().day &&
+        _analiseDataSelecionada.month == DateTime.now().month &&
+        _analiseDataSelecionada.year == DateTime.now().year;
+    final titulo = isHoje
+        ? 'Faturamento por Fila (Hoje)'
+        : 'Faturamento por Fila';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text( // Título alterado para refletir o novo dado
-          '📊 Faturamento por Fila',
+        Text(
+          '📊 $titulo',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 10),
@@ -3302,7 +3984,7 @@ class _DashboardPageState extends State<DashboardPage> {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.grey.shade200),
           ),
-          child: _buildPieChart(isMobile),
+          child: _buildPieChart(isMobile, _analiseDataSelecionada),
         ),
       ],
     );
@@ -3314,11 +3996,19 @@ class _DashboardPageState extends State<DashboardPage> {
     Map<int, List<ConsultaRegistro>> consultasPorHora,
     int maxConsultasNaHora,
   ) {
+    final isHoje =
+        _analiseDataSelecionada.day == DateTime.now().day &&
+        _analiseDataSelecionada.month == DateTime.now().month &&
+        _analiseDataSelecionada.year == DateTime.now().year;
+    final titulo = isHoje
+        ? 'Distribuição Horária (Hoje)'
+        : 'Distribuição Horária';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '🕒 Distribuição Horária',
+        Text(
+          '🕒 $titulo',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 10),
@@ -3346,6 +4036,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     '$hora:00',
                     consultasPorHora[hora]!.length, // Usando o dado já agrupado
                     maxConsultasNaHora,
+                    _analiseDataSelecionada,
                   ),
               const SizedBox(height: 8),
               const Divider(),
@@ -3354,15 +4045,15 @@ class _DashboardPageState extends State<DashboardPage> {
                 runSpacing: 8,
                 children: [
                   Text(
-                    'Total: $totalConsultasHoje',
+                    'Total: ${_getTotalConsultasParaData(_analiseDataSelecionada)}',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    'Horas: $horasAtivas',
+                    'Horas: ${_getHorasAtivasParaData(_analiseDataSelecionada)}',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    'Média: ${mediaHora.toStringAsFixed(1)}/h',
+                    'Média: ${_getMediaHoraParaData(_analiseDataSelecionada).toStringAsFixed(1)}/h',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: temaAtual.cor1,
@@ -3426,7 +4117,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                '$total feitas',
+                '$total hoje',
                 style: TextStyle(
                   fontSize: isMobile ? 11 : 12,
                   color: Colors.grey,
@@ -3461,12 +4152,18 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildDynamicChartRow(String hora, int quantidade, int maxConsultas) {
+  Widget _buildDynamicChartRow(
+    String hora,
+    int quantidade,
+    int maxConsultas,
+    DateTime data,
+  ) {
     final double fatorLargura = maxConsultas > 0
         ? (quantidade / maxConsultas)
         : 0.0;
     final String detalhes = detalhesPorFaixaHoraria(
       int.parse(hora.split(':')[0]),
+      data,
     );
 
     return Padding(
@@ -3532,14 +4229,24 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildPieChart(bool isMobile) {
-    final double faturamentoTotal = receitaHojeBruta;
+  Widget _buildPieChart(bool isMobile, DateTime data) {
+    final consultasDoDia = _historicoConsultas.where(
+      (c) =>
+          c.hora.day == data.day &&
+          c.hora.month == data.month &&
+          c.hora.year == data.year,
+    );
+
+    final double faturamentoTotal = consultasDoDia.fold(
+      0.0,
+      (soma, item) => soma + item.valor,
+    );
 
     if (faturamentoTotal == 0) {
       return const Padding(
         padding: EdgeInsets.all(16.0),
         child: Text(
-          'Nenhum faturamento para exibir o gráfico.',
+          'Nenhum faturamento no dia selecionado para exibir o gráfico.',
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.grey),
         ),
@@ -3548,7 +4255,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
     // Calcula o faturamento por fila em vez da contagem
     final Map<String, double> faturamentoPorFila = {};
-    for (var consulta in _historicoConsultas) {
+    for (var consulta in consultasDoDia) {
       faturamentoPorFila.update(
         consulta.nomeConvenio,
         (value) => value + consulta.valor,
@@ -3624,7 +4331,8 @@ class _DashboardPageState extends State<DashboardPage> {
               padding: const EdgeInsets.only(bottom: 4.0),
               child: _buildIndicator(
                 color: convenio.cor,
-                text: '${convenio.nome} (R\$ ${faturamento.toStringAsFixed(2)})',
+                text:
+                    '${convenio.nome} (R\$ ${faturamento.toStringAsFixed(2)})',
                 isSquare: true,
                 isMobile: isMobile,
               ),
