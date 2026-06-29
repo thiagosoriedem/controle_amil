@@ -478,22 +478,54 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   ),
                   pw.SizedBox(height: 10),
-                  if (receitaBruta > 0)
-                    ..._convenios.map((convenio) {
-                      final faturamento =
-                          faturamentoPorFila[convenio.nome] ?? 0.0;
-                      if (faturamento == 0) return pw.SizedBox.shrink();
-                      final percentual = (faturamento / receitaBruta) * 100;
-                      return pw.Padding(
-                        padding: const pw.EdgeInsets.only(bottom: 4),
-                        child: _buildLegendaPizzaRowPDF(
+                  if (receitaBruta > 0) ...[
+                    pw.SizedBox(
+                      height: 170,
+                      child: pw.Chart(
+                        grid: pw.PieGrid(),
+                        datasets: [
+                          // Para esta versão da biblioteca 'pdf', cada PieDataSet representa uma fatia do gráfico.
+                          // Iteramos sobre os convênios e criamos uma fatia para cada um que teve faturamento.
+                          for (final convenio in _convenios)
+                            if ((faturamentoPorFila[convenio.nome] ?? 0.0) > 0)
+                              pw.PieDataSet(
+                                value: faturamentoPorFila[convenio.nome]!,
+                                color: PdfColor.fromInt(convenio.cor.value),
+                                legend:
+                                    '${(faturamentoPorFila[convenio.nome]! / receitaBruta * 100).toStringAsFixed(0)}%',
+                                legendStyle: pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.white,
+                                  fontWeight: pw.FontWeight.bold,
+                                ),
+                              ),
+                        ],
+                      ),
+                    ),
+                    pw.SizedBox(height: 20),
+                    pw.Text(
+                      'Legenda:',
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    pw.SizedBox(height: 8),
+                    pw.Wrap(
+                      spacing: 16,
+                      runSpacing: 6,
+                      children: _convenios.map((convenio) {
+                        final faturamento =
+                            faturamentoPorFila[convenio.nome] ?? 0.0;
+                        if (faturamento == 0) return pw.SizedBox.shrink();
+                        return _buildLegendaPizzaRowPDF(
                           color: PdfColor.fromInt(convenio.cor.value),
                           texto:
-                              '${convenio.nome}: R\$ ${faturamento.toStringAsFixed(2)} (${percentual.toStringAsFixed(1)}%)',
-                        ),
-                      );
-                    }).toList()
-                  else
+                              '${convenio.nome} - R\$ ${faturamento.toStringAsFixed(2)}',
+                        );
+                      }).toList(),
+                    ),
+                  ] else
                     pw.Text(
                       'Nenhum faturamento no mês.',
                       style: const pw.TextStyle(color: PdfColors.grey),
@@ -683,12 +715,11 @@ class _DashboardPageState extends State<DashboardPage> {
     required String texto,
   }) {
     return pw.Row(
+      mainAxisSize: pw.MainAxisSize.min,
       children: [
         pw.Container(width: 12, height: 12, color: color),
         pw.SizedBox(width: 8),
-        pw.Expanded(
-          child: pw.Text(texto, style: const pw.TextStyle(fontSize: 9)),
-        ),
+        pw.Text(texto, style: const pw.TextStyle(fontSize: 9)),
       ],
     );
   }
