@@ -1654,18 +1654,29 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(Icons.schedule_outlined, size: 20, color: Colors.black87),
-              SizedBox(width: 8),
-              Text(
-                'Registro de Plantões',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
+              const Row(
+                children: [
+                  Icon(Icons.schedule_outlined, size: 20, color: Colors.black87),
+                  SizedBox(width: 8),
+                  Text(
+                    'Registro de Plantões',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
               ),
+              if (_historicoPlantoes.isNotEmpty)
+                TextButton.icon(
+                  onPressed: _zerarHistoricoPlantoes,
+                  icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                  label: const Text('Zerar'),
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -1855,6 +1866,47 @@ class _DashboardPageState extends State<DashboardPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Histórico zerado com sucesso.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _zerarHistoricoPlantoes() async {
+    if (_historicoPlantoes.isEmpty) {
+      return;
+    }
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Zerar plantões'),
+          content: const Text(
+            'Deseja realmente apagar todos os registros de plantão?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Apagar tudo'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmar == true) {
+      setState(() {
+        _historicoPlantoes.clear();
+        _salvarDados();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Histórico de plantões zerado com sucesso.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -2347,7 +2399,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
-                                flex: 2,
+                                flex: 3,
                                 child: Column(
                                   children: [
                                     _buildProgressCard(
@@ -2366,12 +2418,12 @@ class _DashboardPageState extends State<DashboardPage> {
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                flex: 1,
+                                flex: 2,
                                 child: _buildMetaEditor(isMobile),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                flex: 2,
+                                flex: 3,
                                 child: _buildRegistroPlantoesCard(isMobile),
                               ),
                             ],
