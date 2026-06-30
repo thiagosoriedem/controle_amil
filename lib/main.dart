@@ -72,6 +72,13 @@ class _DashboardPageState extends State<DashboardPage> {
   final TextEditingController _pacientesAdicionaisController =
       TextEditingController();
 
+  // NOVO: Estado para o plantão ativo
+  DateTime? _plantaoInicio;
+  Timer? _plantaoTimer;
+  Duration _plantaoDuracao = Duration.zero;
+  int _bonusHorasAdicionados = 0;
+  int _ultimaHoraBonusAdicionada = -1; // O índice da última hora que recebeu bônus
+
   // NOVO: Valores configuráveis para plantão
   double _valorBonusPlantao = 100.0;
   double _valorAdicionalPlantao = 7.0;
@@ -149,6 +156,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void dispose() {
     _discoverySubscription?.cancel();
+    _plantaoTimer?.cancel();
     if (_registration != null) {
       unregister(_registration!);
     }
@@ -323,11 +331,11 @@ class _DashboardPageState extends State<DashboardPage> {
                       'R\$ ${receitaLiquida.toStringAsFixed(2)}',
                       labelStyle: pw.TextStyle(
                         fontWeight: pw.FontWeight.bold,
-                        color: corFundoClaro,
+                        color: corSecundaria,
                       ),
                       valorStyle: pw.TextStyle(
                         fontWeight: pw.FontWeight.bold,
-                        color: corFundoClaro,
+                        color: corSecundaria,
                         fontSize: 14,
                       ),
                     ),
@@ -716,7 +724,9 @@ class _DashboardPageState extends State<DashboardPage> {
             (p) => {
               'id': p.id,
               'bonusAplicado': p.bonusAplicado,
+              'bonusHoras': p.bonusHoras,
               'pacientesAdicionais': p.pacientesAdicionais,
+              'duracaoSegundos': p.duracaoSegundos,
               'valorTotal': p.valorTotal,
               'hora': p.hora.toIso8601String(),
               'modificadoEm': p.modificadoEm.toIso8601String(),
@@ -766,18 +776,25 @@ class _DashboardPageState extends State<DashboardPage> {
       _historicoPlantoes.addAll(
         plantoesDecoded.map((item) {
           // Lógica de compatibilidade com dados antigos
+          int bonusHoras = 0;
           bool bonusAplicado = false;
-          if (item['bonusAplicado'] != null) {
+          if (item['bonusHoras'] != null) {
+            bonusHoras = item['bonusHoras'];
+            bonusAplicado = bonusHoras > 0;
+          } else if (item['bonusAplicado'] != null) {
             bonusAplicado = item['bonusAplicado'];
-          } else if (item['bonusHoras'] != null) {
-            bonusAplicado = (item['bonusHoras'] as int) > 0;
+            bonusHoras = bonusAplicado ? 1 : 0;
           } else if (item['chamei5Pacientes'] != null) {
+            // Fallback para o campo mais antigo
             bonusAplicado = item['chamei5Pacientes'];
+            bonusHoras = bonusAplicado ? 1 : 0;
           }
           return PlantaoRegistro(
             id: item['id'] ?? UniqueKey().toString(),
             bonusAplicado: bonusAplicado,
+            bonusHoras: bonusHoras,
             pacientesAdicionais: item['pacientesAdicionais'],
+            duracaoSegundos: item['duracaoSegundos'] ?? 0,
             valorTotal: item['valorTotal'],
             hora: DateTime.parse(item['hora']),
             modificadoEm: DateTime.parse(item['modificadoEm'] ?? item['hora']),
@@ -899,7 +916,9 @@ class _DashboardPageState extends State<DashboardPage> {
             (p) => {
               'id': p.id,
               'bonusAplicado': p.bonusAplicado,
+              'bonusHoras': p.bonusHoras,
               'pacientesAdicionais': p.pacientesAdicionais,
+              'duracaoSegundos': p.duracaoSegundos,
               'valorTotal': p.valorTotal,
               'hora': p.hora.toIso8601String(),
               'modificadoEm': p.modificadoEm.toIso8601String(),
@@ -921,19 +940,26 @@ class _DashboardPageState extends State<DashboardPage> {
     final List<PlantaoRegistro> plantoesRemotos = [];
     if (dados['plantoes'] != null) {
       for (var p in dados['plantoes']) {
+        int bonusHoras = 0;
         bool bonusAplicado = false;
-        if (p['bonusAplicado'] != null) {
+        if (p['bonusHoras'] != null) {
+          bonusHoras = p['bonusHoras'];
+          bonusAplicado = bonusHoras > 0;
+        } else if (p['bonusAplicado'] != null) {
           bonusAplicado = p['bonusAplicado'];
-        } else if (p['bonusHoras'] != null) {
-          bonusAplicado = (p['bonusHoras'] as int) > 0;
+          bonusHoras = bonusAplicado ? 1 : 0;
         } else if (p['chamei5Pacientes'] != null) {
+          // Fallback para o campo mais antigo
           bonusAplicado = p['chamei5Pacientes'];
+          bonusHoras = bonusAplicado ? 1 : 0;
         }
         plantoesRemotos.add(
           PlantaoRegistro(
             id: p['id'] ?? UniqueKey().toString(),
             bonusAplicado: bonusAplicado,
+            bonusHoras: bonusHoras,
             pacientesAdicionais: p['pacientesAdicionais'],
+            duracaoSegundos: p['duracaoSegundos'] ?? 0,
             valorTotal: p['valorTotal'],
             hora: DateTime.parse(p['hora']),
             modificadoEm: p['modificadoEm'] != null
@@ -1639,7 +1665,7 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
-    // Lógica do bônus automático
+    // Lógica do bônus automático por atendimentos recentes
     final agora = DateTime.now();
     final umaHoraAtras = agora.subtract(const Duration(hours: 1));
     final consultasUltimaHora = _historicoConsultas
@@ -1648,7 +1674,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final bool bonusConcedido = consultasUltimaHora >= 5;
     final double valorBonus = bonusConcedido ? _valorBonusPlantao : 0.0;
-
     final valorTotal = valorBonus + (adicionais * _valorAdicionalPlantao);
 
     setState(() {
@@ -1657,14 +1682,16 @@ class _DashboardPageState extends State<DashboardPage> {
         PlantaoRegistro(
           id: UniqueKey().toString(),
           bonusAplicado: bonusConcedido,
+          bonusHoras: bonusConcedido ? 1 : 0,
           pacientesAdicionais: adicionais,
           valorTotal: valorTotal,
           hora: agora,
           modificadoEm: agora,
+          // Duração não se aplica a este tipo de registro
+          duracaoSegundos: 0,
         ),
       );
 
-      // Limpa os campos após registrar
       _pacientesAdicionaisController.clear();
       _salvarDados();
     });
@@ -1679,6 +1706,131 @@ class _DashboardPageState extends State<DashboardPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(snackbarMessage), backgroundColor: Colors.green),
     );
+  }
+
+  // --- LÓGICA DE NEGÓCIO (PLANTÕES E CÁLCULOS) ---
+  String _formatarDuracao(Duration duracao) {
+    String doisDigitos(int n) => n.toString().padLeft(2, '0');
+    final horas = doisDigitos(duracao.inHours);
+    final minutos = doisDigitos(duracao.inMinutes.remainder(60));
+    final segundos = doisDigitos(duracao.inSeconds.remainder(60));
+    return '$horas:$minutos:$segundos';
+  }
+
+  void _iniciarPlantao() {
+    setState(() {
+      _plantaoInicio = DateTime.now();
+      _plantaoDuracao = Duration.zero;
+      _bonusHorasAdicionados = 0;
+      _ultimaHoraBonusAdicionada = -1;
+      _pacientesAdicionaisController.clear();
+ 
+      _plantaoTimer?.cancel(); // Cancela timer anterior se houver
+      _plantaoTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (_plantaoInicio == null) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          _plantaoDuracao = DateTime.now().difference(_plantaoInicio!);
+        });
+      });
+    });
+  }
+ 
+  void _adicionarBonusHora() {
+    final horaAtualIndex = _plantaoDuracao.inHours;
+    if (horaAtualIndex > _ultimaHoraBonusAdicionada) {
+      setState(() {
+        _bonusHorasAdicionados++;
+        _ultimaHoraBonusAdicionada = horaAtualIndex;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Bônus por hora adicionado!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Bônus para esta hora já foi adicionado.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+  void _finalizarEregistrarPlantao() {
+    _plantaoTimer?.cancel();
+
+    final adicionais =
+        int.tryParse(_pacientesAdicionaisController.text.trim()) ?? 0;
+    final valorTotal = (_bonusHorasAdicionados * _valorBonusPlantao) +
+        (adicionais * _valorAdicionalPlantao);
+
+    if (valorTotal <= 0) {
+      // Se não há valor, apenas cancela o plantão sem registrar
+      _cancelarPlantao(confirmar: false);
+      return;
+    }
+
+    final novoPlantao = PlantaoRegistro(
+      id: UniqueKey().toString(),
+      bonusHoras: _bonusHorasAdicionados,
+      pacientesAdicionais: adicionais,
+      duracaoSegundos: _plantaoDuracao.inSeconds,
+      valorTotal: valorTotal,
+      hora: _plantaoInicio!,
+      modificadoEm: DateTime.now(),
+    );
+
+    setState(() {
+      _historicoPlantoes.insert(0, novoPlantao);
+      _plantaoInicio = null; // Reseta o estado do plantão
+      _pacientesAdicionaisController.clear();
+      _salvarDados();
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('✅ Plantão finalizado e registrado com sucesso!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Future<void> _cancelarPlantao({bool confirmar = true}) async {
+    bool podeCancelar = true;
+    if (confirmar) {
+      podeCancelar = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Cancelar Plantão'),
+              content: const Text(
+                  'Deseja realmente cancelar o plantão atual? Nenhum dado será salvo.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Não'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Sim, Cancelar'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+    }
+
+    if (podeCancelar) {
+      _plantaoTimer?.cancel();
+      setState(() {
+        _plantaoInicio = null;
+      });
+    }
   }
 
   Widget _buildHeaderRegistroPlantoes() {
@@ -1700,12 +1852,139 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         ),
         if (_historicoPlantoes.isNotEmpty)
+        if (_historicoPlantoes.isNotEmpty && _plantaoInicio == null)
           TextButton.icon(
             onPressed: _zerarHistoricoPlantoes,
             icon: const Icon(Icons.delete_sweep_outlined, size: 18),
             label: const Text('Zerar'),
           ),
       ],
+    );
+  }
+
+  Widget _buildIniciarPlantaoUI() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32.0),
+        child: ElevatedButton.icon(
+          onPressed: _iniciarPlantao,
+          icon: const Icon(Icons.play_arrow),
+          label: const Text('Iniciar Plantão'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: temaAtual.cor1,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            textStyle: const TextStyle(fontSize: 16),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlantaoAtivoUI() {
+    final horaAtualIndex = _plantaoDuracao.inHours;
+    final podeAdicionarBonus = horaAtualIndex > _ultimaHoraBonusAdicionada;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          // Cronômetro
+          Text(
+            'Tempo de Plantão',
+            style: TextStyle(color: temaAtual.cor2, fontSize: 14),
+          ),
+          Text(
+            _formatarDuracao(_plantaoDuracao),
+            style: TextStyle(
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
+              color: temaAtual.cor2,
+            ),
+          ),
+          const Divider(height: 32),
+
+          // Bônus por Hora
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Bônus por hora (R\$ ${_valorBonusPlantao.toStringAsFixed(2)})'),
+                    Text(
+                      '$_bonusHorasAdicionados adicionado(s)',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: podeAdicionarBonus ? _adicionarBonusHora : null,
+                child: const Text('Adicionar'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Pacientes Adicionais
+          Text('Pacientes adicionais (R\$ ${_valorAdicionalPlantao.toStringAsFixed(2)} cada)'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _pacientesAdicionaisController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              hintText: '0',
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Botões de Ação
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _cancelarPlantao(confirmar: true),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
+                  ),
+                  child: const Text('Cancelar'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _finalizarEregistrarPlantao,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Finalizar'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1792,6 +2071,9 @@ class _DashboardPageState extends State<DashboardPage> {
               ],
             ),
           ),
+          _plantaoInicio == null
+              ? _buildIniciarPlantaoUI()
+              : _buildPlantaoAtivoUI(),
           const SizedBox(height: 24),
           _buildResumoPlantaoRow('Plantões hoje:', qtdHoje.toString()),
           const SizedBox(height: 12),
