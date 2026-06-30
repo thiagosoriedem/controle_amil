@@ -77,7 +77,8 @@ class _DashboardPageState extends State<DashboardPage> {
   Timer? _plantaoTimer;
   Duration _plantaoDuracao = Duration.zero;
   int _bonusHorasAdicionados = 0;
-  int _ultimaHoraBonusAdicionada = -1; // O índice da última hora que recebeu bônus
+  int _ultimaHoraBonusAdicionada =
+      -1; // O índice da última hora que recebeu bônus
 
   // NOVO: Valores configuráveis para plantão
   double _valorBonusPlantao = 100.0;
@@ -1693,8 +1694,8 @@ class _DashboardPageState extends State<DashboardPage> {
       );
 
       _pacientesAdicionaisController.clear();
-      _salvarDados();
     });
+    _salvarDados();
 
     String snackbarMessage =
         '✅ ${adicionais} paciente(s) adicionai(s) registrado(s)!';
@@ -1724,7 +1725,7 @@ class _DashboardPageState extends State<DashboardPage> {
       _bonusHorasAdicionados = 0;
       _ultimaHoraBonusAdicionada = -1;
       _pacientesAdicionaisController.clear();
- 
+
       _plantaoTimer?.cancel(); // Cancela timer anterior se houver
       _plantaoTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (_plantaoInicio == null) {
@@ -1737,7 +1738,7 @@ class _DashboardPageState extends State<DashboardPage> {
       });
     });
   }
- 
+
   void _adicionarBonusHora() {
     final horaAtualIndex = _plantaoDuracao.inHours;
     if (horaAtualIndex > _ultimaHoraBonusAdicionada) {
@@ -1766,7 +1767,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final adicionais =
         int.tryParse(_pacientesAdicionaisController.text.trim()) ?? 0;
-    final valorTotal = (_bonusHorasAdicionados * _valorBonusPlantao) +
+    final valorTotal =
+        (_bonusHorasAdicionados * _valorBonusPlantao) +
         (adicionais * _valorAdicionalPlantao);
 
     if (valorTotal <= 0) {
@@ -1777,6 +1779,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final novoPlantao = PlantaoRegistro(
       id: UniqueKey().toString(),
+      bonusAplicado: _bonusHorasAdicionados > 0,
       bonusHoras: _bonusHorasAdicionados,
       pacientesAdicionais: adicionais,
       duracaoSegundos: _plantaoDuracao.inSeconds,
@@ -1789,8 +1792,8 @@ class _DashboardPageState extends State<DashboardPage> {
       _historicoPlantoes.insert(0, novoPlantao);
       _plantaoInicio = null; // Reseta o estado do plantão
       _pacientesAdicionaisController.clear();
-      _salvarDados();
     });
+    _salvarDados();
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -1803,12 +1806,14 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _cancelarPlantao({bool confirmar = true}) async {
     bool podeCancelar = true;
     if (confirmar) {
-      podeCancelar = await showDialog<bool>(
+      podeCancelar =
+          await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
               title: const Text('Cancelar Plantão'),
               content: const Text(
-                  'Deseja realmente cancelar o plantão atual? Nenhum dado será salvo.'),
+                'Deseja realmente cancelar o plantão atual? Nenhum dado será salvo.',
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
@@ -1851,7 +1856,7 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ],
         ),
-        if (_historicoPlantoes.isNotEmpty)
+        // FIX: The duplicated 'if' statements below were consolidated
         if (_historicoPlantoes.isNotEmpty && _plantaoInicio == null)
           TextButton.icon(
             onPressed: _zerarHistoricoPlantoes,
@@ -1916,7 +1921,9 @@ class _DashboardPageState extends State<DashboardPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Bônus por hora (R\$ ${_valorBonusPlantao.toStringAsFixed(2)})'),
+                    Text(
+                      'Bônus por hora (R\$ ${_valorBonusPlantao.toStringAsFixed(2)})',
+                    ),
                     Text(
                       '$_bonusHorasAdicionados adicionado(s)',
                       style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -1933,7 +1940,9 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 16),
 
           // Pacientes Adicionais
-          Text('Pacientes adicionais (R\$ ${_valorAdicionalPlantao.toStringAsFixed(2)} cada)'),
+          Text(
+            'Pacientes adicionais (R\$ ${_valorAdicionalPlantao.toStringAsFixed(2)} cada)',
+          ),
           const SizedBox(height: 8),
           TextField(
             controller: _pacientesAdicionaisController,
@@ -1941,8 +1950,10 @@ class _DashboardPageState extends State<DashboardPage> {
             decoration: InputDecoration(
               hintText: '0',
               isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
               filled: true,
               fillColor: Colors.white,
               border: OutlineInputBorder(
@@ -3362,10 +3373,10 @@ class _DashboardPageState extends State<DashboardPage> {
   ) {
     final isCreating = index == null;
     // Usa variáveis temporárias para evitar modificar o objeto original até salvar
-    String tempNome = isCreating ? '' : _convenios[index!].nome;
-    double tempValor = isCreating ? 0.0 : _convenios[index!].valor;
-    Color tempCor = isCreating ? Colors.blue : _convenios[index!].cor;
-    final id = isCreating ? UniqueKey().toString() : _convenios[index!].id;
+    String tempNome = isCreating ? '' : _convenios[index].nome;
+    double tempValor = isCreating ? 0.0 : _convenios[index].valor;
+    Color tempCor = isCreating ? Colors.blue : _convenios[index].cor;
+    final id = isCreating ? UniqueKey().toString() : _convenios[index].id;
 
     final nomeController = TextEditingController(text: tempNome);
     final valorController = TextEditingController(
@@ -3553,7 +3564,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${tema.cor1.value.toRadixString(16).toUpperCase()}',
+                            tema.cor1.value.toRadixString(16).toUpperCase(),
                             style: TextStyle(fontSize: 11, color: tema.cor2),
                           ),
                         ],
