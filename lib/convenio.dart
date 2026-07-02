@@ -19,7 +19,7 @@ class Convenio {
         'id': id,
         'nome': nome,
         'valor': valor,
-        'cor': cor.value,
+        'cor': cor.toARGB32(),
       };
 
   factory Convenio.fromJson(Map<String, dynamic> json) => Convenio(

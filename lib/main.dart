@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:controle_amil/services/update_service.dart';
 import 'package:flutter/material.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -118,7 +119,7 @@ class _DashboardPageState extends State<DashboardPage> {
   // Sincronização Automática
   bool _syncAutomaticoAtivo = false;
   String? _parceiroSyncIp;
-  bool _solicitacaoEmProgresso = false;
+  final bool _solicitacaoEmProgresso = false;
 
   // Tema customizado
   String _temaSelecionado = 'rosa';
@@ -152,6 +153,41 @@ class _DashboardPageState extends State<DashboardPage> {
 
     // Só então inicia o servidor, que depende do nome do dispositivo
     _iniciarServidorSincronizacao();
+    _checkForUpdates();
+  }
+
+  Future<void> _checkForUpdates() async {
+    final updateService = UpdateService();
+    final updateInfo = await updateService.checkForUpdate();
+    if (updateInfo != null && mounted) {
+      _showUpdateDialog(updateInfo);
+    }
+  }
+
+  void _showUpdateDialog(Map<String, String> updateInfo) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Nova versão disponível: ${updateInfo['version']}'),
+        content: SingleChildScrollView(
+          child: Text(updateInfo['notes'] ?? 'Notas da versão não disponíveis.'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Mais tarde'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final updateService = UpdateService();
+              updateService.launchUpdate(updateInfo['url']!);
+              Navigator.of(context).pop();
+            },
+            child: const Text('Atualizar Agora'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -210,15 +246,15 @@ class _DashboardPageState extends State<DashboardPage> {
     if (maxConsultasNaHora == 0) maxConsultasNaHora = 1;
 
     // --- CORES DO TEMA ---
-    final corPrimaria = PdfColor.fromInt(temaAtual.cor1.value);
+    final corPrimaria = PdfColor.fromInt(temaAtual.cor1.toARGB32());
     final corPrimariaClaro = PdfColor(
       temaAtual.cor1.red / 255.0,
       temaAtual.cor1.green / 255.0,
       temaAtual.cor1.blue / 255.0,
       0.2,
     );
-    final corSecundaria = PdfColor.fromInt(temaAtual.cor2.value);
-    final corFundoClaro = PdfColor.fromInt(temaAtual.fundoBatida.value);
+    final corSecundaria = PdfColor.fromInt(temaAtual.cor2.toARGB32());
+    final corFundoClaro = PdfColor.fromInt(temaAtual.fundoBatida.toARGB32());
 
     // 2. Criar o documento PDF com novo layout
     final pdf = pw.Document();
@@ -393,7 +429,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             if ((faturamentoPorFila[convenio.nome] ?? 0.0) > 0)
                               pw.PieDataSet(
                                 value: faturamentoPorFila[convenio.nome]!,
-                                color: PdfColor.fromInt(convenio.cor.value),
+                                color: PdfColor.fromInt(convenio.cor.toARGB32()),
                                 legend:
                                     '${(faturamentoPorFila[convenio.nome]! / receitaBruta * 100).toStringAsFixed(0)}%',
                                 legendStyle: pw.TextStyle(
@@ -422,7 +458,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             faturamentoPorFila[convenio.nome] ?? 0.0;
                         if (faturamento == 0) return pw.SizedBox.shrink();
                         return _buildLegendaPizzaRowPDF(
-                          color: PdfColor.fromInt(convenio.cor.value),
+                          color: PdfColor.fromInt(convenio.cor.toARGB32()),
                           texto:
                               '${convenio.nome} - R\$ ${faturamento.toStringAsFixed(2)}',
                         );
@@ -1698,7 +1734,7 @@ class _DashboardPageState extends State<DashboardPage> {
     _salvarDados();
 
     String snackbarMessage =
-        '✅ ${adicionais} paciente(s) adicionai(s) registrado(s)!';
+        '✅ $adicionais paciente(s) adicionai(s) registrado(s)!';
     if (bonusConcedido) {
       snackbarMessage +=
           ' Bônus de R\$${_valorBonusPlantao.toStringAsFixed(2)} aplicado!';
@@ -1821,8 +1857,8 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 ElevatedButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Sim, Cancelar'),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Sim, Cancelar'),
                 ),
               ],
             ),
@@ -2357,8 +2393,9 @@ class _DashboardPageState extends State<DashboardPage> {
           .map((e) => e.length)
           .reduce((a, b) => a > b ? a : b);
     }
-    if (maxConsultasNaHora == 0)
+    if (maxConsultasNaHora == 0) {
       maxConsultasNaHora = 1; // Evita divisão por zero
+    }
 
     // Detectar orientação e tamanho da tela
     final isMobile = MediaQuery.of(context).size.width < 600;
@@ -2459,10 +2496,10 @@ class _DashboardPageState extends State<DashboardPage> {
                       width: double.infinity,
                       padding: EdgeInsets.all(isMobile ? 12 : 16),
                       decoration: BoxDecoration(
-                        color: temaAtual.cor1.withOpacity(0.1),
+                        color: temaAtual.cor1.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: temaAtual.cor1.withOpacity(0.3),
+                          color: temaAtual.cor1.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Column(
@@ -2604,7 +2641,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         color: temaAtual.fundoBatida,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: temaAtual.cor1.withOpacity(0.3),
+                          color: temaAtual.cor1.withValues(alpha: 0.3),
                         ),
                       ),
                       child: isMobile
@@ -3218,7 +3255,7 @@ class _DashboardPageState extends State<DashboardPage> {
               dotData: const FlDotData(show: true),
               belowBarData: BarAreaData(
                 show: true,
-                color: temaAtual.cor1.withOpacity(0.2),
+                color: temaAtual.cor1.withValues(alpha: 0.2),
               ),
             ),
           ],
@@ -3564,7 +3601,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            tema.cor1.value.toRadixString(16).toUpperCase(),
+                            tema.cor1.toARGB32().toRadixString(16).toUpperCase(),
                             style: TextStyle(fontSize: 11, color: tema.cor2),
                           ),
                         ],
@@ -3859,7 +3896,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 icon: const Icon(Icons.sync_alt),
                 label: const Text('Sincronizar...'),
                 style: ElevatedButton.styleFrom(
-                  disabledBackgroundColor: temaAtual.cor1.withOpacity(0.8),
+                  disabledBackgroundColor: temaAtual.cor1.withValues(alpha: 0.8),
                   disabledForegroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
@@ -4030,7 +4067,7 @@ class _DashboardPageState extends State<DashboardPage> {
             decoration: BoxDecoration(
               color: temaAtual.fundoBatida,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: temaAtual.cor1.withOpacity(0.3)),
+              border: Border.all(color: temaAtual.cor1.withValues(alpha: 0.3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

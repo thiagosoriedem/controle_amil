@@ -1,0 +1,160 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+class UpdateService {
+  // Tornando a URL pública para ser acessível nos testes
+  static const String githubApiUrl =
+      'https://api.github.com/repos/thiagosoriedem/controle_amil/releases/latest';
+
+  final http.Client _client;
+
+  // Construtor que permite injetar um http.Client para testes.
+  UpdateService({http.Client? client}) : _client = client ?? http.Client();
+
+  Future<Map<String, String>?> checkForUpdate() async {
+    try {
+      final PackageInfo packageInfo = await PackageInfo.fromPlatform();
+      final String currentVersion = packageInfo.version;
+
+      // Para evitar o "API rate limit", usamos um token de acesso pessoal do GitHub.
+      // O token é injetado no momento da compilação via --dart-define.
+      // NUNCA coloque o token diretamente no código.
+      const String githubToken = String.fromEnvironment(
+        'GITHUB_TOKEN',
+        defaultValue: '',
+      );
+
+      final headers = {
+        'Accept': 'application/vnd.github.v3+json',
+        if (githubToken.isNotEmpty) 'Authorization': 'Bearer $githubToken',
+      };
+
+      final response = await _client.get(
+        Uri.parse(githubApiUrl),
+        headers: headers,
+      );
+      if (response.statusCode != 200) {
+        print(
+          'Falha ao verificar atualização. Status: ${response.statusCode}, Corpo: ${response.body}',
+        );
+        return null;
+      }
+
+      final json = jsonDecode(response.body);
+      final latestVersion = (json['tag_name'] as String).replaceAll('v', '');
+      final releaseNotes = json['body'] as String;
+
+      print(
+        'Versão atual: $currentVersion, Versão mais recente: $latestVersion',
+      );
+
+      if (isUpdateAvailable(currentVersion, latestVersion)) {
+        print('✅ Atualização disponível. Procurando URL de download...');
+        final downloadUrl = _getDownloadUrlForPlatform(json['assets']);
+        if (downloadUrl != null) {
+          print('✅ URL de download encontrada: $downloadUrl');
+          return {
+            'version': latestVersion,
+            'notes': releaseNotes,
+            'url': downloadUrl,
+          };
+        } else {
+          print('❌ URL de download NÃO encontrada para a plataforma atual.');
+        }
+      } else {
+        print(
+          'ℹ️ Nenhuma atualização disponível. A versão já é a mais recente.',
+        );
+      }
+    } catch (e) {
+      print('Error checking for update: $e');
+    }
+
+    // Se chegou até aqui, algo falhou ou não havia atualização.
+    return null;
+  }
+
+  /// Compares two version strings (e.g., '1.2.3' vs '1.3.0') and returns true if a new version is available.
+  bool isUpdateAvailable(String currentVersion, String latestVersion) {
+    final currentParts = currentVersion
+        .split('.')
+        .map((e) => int.tryParse(e) ?? 0)
+        .toList();
+    final latestParts = latestVersion
+        .split('.')
+        .map((e) => int.tryParse(e) ?? 0)
+        .toList();
+
+    final len = max(currentParts.length, latestParts.length);
+
+    for (var i = 0; i < len; i++) {
+      final latest = i < latestParts.length ? latestParts[i] : 0;
+      final current = i < currentParts.length ? currentParts[i] : 0;
+      if (latest > current) return true;
+      if (latest < current) return false;
+    }
+    return false;
+  }
+
+  String? _getDownloadUrlForPlatform(List<dynamic> assets) {
+    String? platformIdentifier;
+    if (Platform.isAndroid) {
+      // Mais robusto: procura por '.apk', que é o padrão do build do Flutter.
+      // Antes estava 'android', que não existe no nome do arquivo 'app-release.apk'.
+      platformIdentifier = '.apk';
+    } else if (Platform.isWindows) {
+      platformIdentifier = 'windows';
+    } else if (Platform.isLinux) {
+      platformIdentifier = 'linux';
+    } else if (Platform.isMacOS) {
+      platformIdentifier = 'macos';
+    }
+
+    if (platformIdentifier != null) {
+      final asset = assets.firstWhere(
+        (asset) => (asset['name'] as String).toLowerCase().contains(
+          platformIdentifier!,
+        ),
+        orElse: () => null,
+      );
+      return asset != null ? asset['browser_download_url'] : null;
+    }
+
+    // For iOS and Web, we'll handle the URL separately or just open the main releases page.
+    if (Platform.isIOS) {
+      return 'https://apps.apple.com/app/id<YOUR_APP_ID>'; // Placeholder
+    }
+
+    return 'https://github.com/thiagosoriedem/controle_amil/releases/latest';
+  }
+
+  Future<void> launchUpdate(String url) async {
+    final uri = Uri.parse(url);
+    print('🚀 Tentando abrir a URL de atualização: $url');
+    if (await canLaunchUrl(uri)) {
+      print('✅ URL pode ser aberta. Lançando...');
+      try {
+        final bool launched = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (!launched) {
+          print('❌ launchUrl retornou false. Não foi possível abrir a URL.');
+        } else {
+          print('✅ launchUrl executado com sucesso.');
+        }
+      } catch (e) {
+        print('❌ Erro ao executar launchUrl: $e');
+      }
+    } else {
+      print(
+        '❌ Não é possível abrir a URL: $url. Verifique as configurações do AndroidManifest.xml (queries).',
+      );
+    }
+  }
+}
