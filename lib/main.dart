@@ -2692,61 +2692,10 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
           actions: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Tooltip(
-                message: 'Escolher Tema',
-                child: GestureDetector(
-                  onTap: () => _mostrarSeletorTema(context),
-                  child: CircleAvatar(
-                    backgroundColor: temaAtual.cor1,
-                    child: const Icon(
-                      Icons.palette_outlined,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Tooltip(
-                message:
-                    'Sincronização: ${_server == null ? 'Inativa' : 'Ativa'}',
-                child: GestureDetector(
-                  onTap: () => _mostrarMenuBackup(context),
-                  child: CircleAvatar(
-                    backgroundColor: _server == null
-                        ? const Color.fromARGB(255, 243, 33, 96)
-                        : Colors.green,
-                    child: Icon(
-                      _server == null
-                          ? Icons.sync_disabled_outlined
-                          : Icons.cloud_sync_outlined,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Tooltip(
-                message: 'Exportar PDF do Mês',
-                child: GestureDetector(
-                  onTap: _exportarRelatorioMensalPDF,
-                  child: const CircleAvatar(
-                    backgroundColor: Colors.redAccent,
-                    child: Icon(
-                      Icons.picture_as_pdf_outlined,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
-              ),
+            IconButton(
+              icon: Icon(Icons.settings_outlined, color: temaAtual.cor2),
+              tooltip: 'Configurações',
+              onPressed: () => _mostrarPaginaConfiguracoes(context),
             ),
           ],
           bottom: TabBar(
@@ -3028,8 +2977,6 @@ class _DashboardPageState extends State<DashboardPage> {
                                 metaMensal,
                               ),
                               const SizedBox(height: 24),
-                              _buildConfiguracoesCard(isMobile),
-                              const SizedBox(height: 24),
                               _buildRegistroPlantoesCard(isMobile),
                             ],
                           )
@@ -3053,11 +3000,6 @@ class _DashboardPageState extends State<DashboardPage> {
                                     ),
                                   ],
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                flex: 2,
-                                child: _buildConfiguracoesCard(isMobile),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -3576,6 +3518,88 @@ class _DashboardPageState extends State<DashboardPage> {
           child: _buildRevenueChartWidget(),
         ),
       ],
+    );
+  }
+
+  void _mostrarPaginaConfiguracoes(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.9,
+          builder: (_, scrollController) {
+            return Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // Handle
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Title
+                  Text(
+                    'Configurações e Ações',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: temaAtual.cor2,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // List of actions
+                  Expanded(
+                    child: ListView(
+                      controller: scrollController,
+                      children: [
+                        ListTile(
+                          leading: Icon(Icons.palette_outlined, color: temaAtual.cor1),
+                          title: const Text('Alterar Tema'),
+                          onTap: () {
+                            Navigator.pop(context); // Fecha a modal de config
+                            _mostrarSeletorTema(context);
+                          },
+                        ),
+                        ListTile(
+                          leading: Icon(Icons.sync_outlined, color: temaAtual.cor1),
+                          title: const Text('Sincronização e Backup'),
+                          onTap: () {
+                            Navigator.pop(context); // Fecha a modal de config
+                            _mostrarMenuBackup(context);
+                          },
+                        ),
+                        ListTile(
+                          leading: Icon(Icons.picture_as_pdf_outlined, color: temaAtual.cor1),
+                          title: const Text('Exportar Relatório PDF'),
+                          onTap: () {
+                            Navigator.pop(context); // Fecha a modal de config
+                            _exportarRelatorioMensalPDF();
+                          },
+                        ),
+                        const Divider(height: 32),
+                        // O card de configurações em si
+                        _buildConfiguracoesCard(isMobile),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
