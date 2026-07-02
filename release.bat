@@ -1,18 +1,6 @@
 @echo off
 setlocal
 
-:: --- Verifica se o GitHub CLI (gh) está instalado ---
-gh --version >nul 2>nul
-if %errorlevel% neq 0 (
-    echo ❌ Erro: O GitHub CLI ('gh') nao foi encontrado.
-    echo.
-    echo    Por favor, instale-o e faca o login seguindo as instrucoes em:
-    echo    https://cli.github.com/
-    echo.
-    echo    Depois de instalar, FECHE e REABRA este terminal e tente novamente.
-    exit /b 1
-)
-
 :: --- Script para automatizar o build e release do APK no GitHub ---
 
 :: 1. Variáveis de Configuração
