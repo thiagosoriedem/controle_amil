@@ -25,7 +25,13 @@ import 'models/plantao_registro.dart';
 import 'package:controle_amil/services/update_service.dart'; // Mover import para cá
 import 'models/tema_customizado.dart';
 
-void main() {
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+Future<void> main() async {
+  // Garante que os bindings do Flutter foram inicializados.
+  WidgetsFlutterBinding.ensureInitialized();
+  // Carrega as variáveis de ambiente do arquivo .env
+  await dotenv.load(fileName: ".env");
   runApp(const MyApp());
 }
 

@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -37,13 +38,10 @@ class UpdateService {
       final PackageInfo packageInfo = await PackageInfo.fromPlatform();
       final String currentVersion = packageInfo.version;
 
-      // Para evitar o "API rate limit", usamos um token de acesso pessoal do GitHub.
-      // O token é injetado no momento da compilação via --dart-define.
+      // Para evitar o "API rate limit", usamos um token de acesso pessoal do GitHub
+      // carregado a partir do arquivo .env.
       // NUNCA coloque o token diretamente no código.
-      const String githubToken = String.fromEnvironment(
-        'GITHUB_TOKEN',
-        defaultValue: '',
-      );
+      final String githubToken = dotenv.env['GITHUB_TOKEN'] ?? '';
 
       final headers = {
         'Accept': 'application/vnd.github.v3+json',
@@ -182,7 +180,9 @@ class UpdateService {
 
       final contentLength = response.contentLength;
       if (contentLength == null) {
-        throw Exception('Não foi possível obter o tamanho do arquivo de atualização.');
+        throw Exception(
+          'Não foi possível obter o tamanho do arquivo de atualização.',
+        );
       }
 
       final tempDir = await getTemporaryDirectory();
@@ -212,11 +212,7 @@ class UpdateService {
       );
     } catch (e) {
       print('❌ Erro durante o download da atualização: $e');
-      yield DownloadProgress(
-        count: 0,
-        total: 0,
-        status: 'error',
-      );
+      yield DownloadProgress(count: 0, total: 0, status: 'error');
     }
   }
 }
