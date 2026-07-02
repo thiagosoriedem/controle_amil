@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:open_file/open_file.dart';
 import 'package:flutter/material.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -11,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:nsd/nsd.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:package_info_plus/package_info_plus.dart'; // Importar PackageInfoPlus
 import 'package:shelf_router/shelf_router.dart' as shelf_router;
@@ -160,7 +162,8 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _checkForUpdates() async {
     final updateService = UpdateService();
     final updateInfo = await updateService.checkForUpdate();
-    final PackageInfo packageInfo = await PackageInfo.fromPlatform(); // Obter a versão atual
+    final PackageInfo packageInfo =
+        await PackageInfo.fromPlatform(); // Obter a versão atual
     final String currentVersion = packageInfo.version;
 
     if (updateInfo != null && mounted) {
@@ -168,14 +171,25 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  void _showUpdateDialog(Map<String, String> updateInfo, String currentVersion) {
+  void _showUpdateDialog(
+    Map<String, String> updateInfo,
+    String currentVersion,
+  ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         titlePadding: EdgeInsets.zero, // Remove o padding padrão do título
-        contentPadding: const EdgeInsets.fromLTRB(24.0, 0.0, 24.0, 24.0), // Ajusta o padding do conteúdo
-        actionsPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        contentPadding: const EdgeInsets.fromLTRB(
+          24.0,
+          0.0,
+          24.0,
+          24.0,
+        ), // Ajusta o padding do conteúdo
+        actionsPadding: const EdgeInsets.symmetric(
+          horizontal: 16.0,
+          vertical: 8.0,
+        ),
         title: Container(
           padding: const EdgeInsets.all(16.0),
           decoration: BoxDecoration(
@@ -184,14 +198,18 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.system_update_alt, color: Colors.white, size: 28),
+              const Icon(
+                Icons.system_update_alt,
+                color: Colors.white,
+                size: 28,
+              ),
               const SizedBox(width: 12),
               Text(
                 'Atualização Disponível!',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -207,17 +225,29 @@ class _DashboardPageState extends State<DashboardPage> {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 8),
-              Text('Versão atual: $currentVersion', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[700])),
+              Text(
+                'Versão atual: $currentVersion',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+              ),
               Text(
                 'Nova versão: ${updateInfo['version']}',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall?.copyWith(fontWeight: FontWeight.bold, color: temaAtual.cor1),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: temaAtual.cor1,
+                ),
               ),
               const SizedBox(height: 16),
-              const Text('Novidades:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                'Novidades:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
-              Text(updateInfo['notes'] ?? 'Notas da versão não disponíveis.', style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                updateInfo['notes'] ?? 'Notas da versão não disponíveis.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
           ),
         ),
@@ -232,15 +262,22 @@ class _DashboardPageState extends State<DashboardPage> {
               foregroundColor: Colors.white,
             ),
             onPressed: () {
-              final updateService = UpdateService();
-              updateService.launchUpdate(updateInfo['url']!);
-              // Opcional: Você pode querer mostrar um SnackBar ou Toast
-              // informando que o download foi iniciado ou que o navegador foi aberto.
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Iniciando download da atualização...')),
-              );
-              // Fecha o diálogo após iniciar a atualização
               Navigator.of(context).pop();
+
+              if (Platform.isAndroid) {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => _UpdateDownloadDialog(
+                    url: updateInfo['url']!,
+                    tema: temaAtual,
+                  ),
+                );
+              } else {
+                // Para outras plataformas, mantém o comportamento de abrir o navegador
+                final updateService = UpdateService();
+                updateService.launchUpdate(updateInfo['url']!);
+              }
             },
             child: const Text('Atualizar Agora'),
           ),
@@ -488,7 +525,9 @@ class _DashboardPageState extends State<DashboardPage> {
                             if ((faturamentoPorFila[convenio.nome] ?? 0.0) > 0)
                               pw.PieDataSet(
                                 value: faturamentoPorFila[convenio.nome]!,
-                                color: PdfColor.fromInt(convenio.cor.toARGB32()),
+                                color: PdfColor.fromInt(
+                                  convenio.cor.toARGB32(),
+                                ),
                                 legend:
                                     '${(faturamentoPorFila[convenio.nome]! / receitaBruta * 100).toStringAsFixed(0)}%',
                                 legendStyle: pw.TextStyle(
@@ -3660,7 +3699,10 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            tema.cor1.toARGB32().toRadixString(16).toUpperCase(),
+                            tema.cor1
+                                .toARGB32()
+                                .toRadixString(16)
+                                .toUpperCase(),
                             style: TextStyle(fontSize: 11, color: tema.cor2),
                           ),
                         ],
@@ -3955,7 +3997,9 @@ class _DashboardPageState extends State<DashboardPage> {
                 icon: const Icon(Icons.sync_alt),
                 label: const Text('Sincronizar...'),
                 style: ElevatedButton.styleFrom(
-                  disabledBackgroundColor: temaAtual.cor1.withValues(alpha: 0.8),
+                  disabledBackgroundColor: temaAtual.cor1.withValues(
+                    alpha: 0.8,
+                  ),
                   disabledForegroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
@@ -4827,4 +4871,105 @@ class _DashboardPageState extends State<DashboardPage> {
       Text(text, style: TextStyle(fontSize: isMobile ? 11 : 12)),
     ],
   );
+}
+
+class _UpdateDownloadDialog extends StatefulWidget {
+  final String url;
+  final TemaCustomizado tema;
+
+  const _UpdateDownloadDialog({required this.url, required this.tema});
+
+  @override
+  State<_UpdateDownloadDialog> createState() => _UpdateDownloadDialogState();
+}
+
+class _UpdateDownloadDialogState extends State<_UpdateDownloadDialog> {
+  final UpdateService _updateService = UpdateService();
+  StreamSubscription? _downloadSubscription;
+  double _progress = 0.0;
+  String _statusText = 'Iniciando download...';
+
+  @override
+  void initState() {
+    super.initState();
+    _startDownload();
+  }
+
+  @override
+  void dispose() {
+    _downloadSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _startDownload() async {
+    _downloadSubscription = _updateService.downloadUpdate(widget.url).listen((
+      DownloadProgress progress,
+    ) async {
+      if (!mounted) return;
+
+      setState(() {
+        if (progress.status == 'downloading') {
+          _progress = progress.count / progress.total;
+          _statusText = 'Baixando... ${(_progress * 100).toStringAsFixed(0)}%';
+        } else if (progress.status == 'error') {
+          _statusText = 'Erro no download. Tente novamente mais tarde.';
+          _progress = 0.0;
+        }
+      });
+
+      if (progress.status == 'completed' && progress.filePath != null) {
+        setState(() {
+          _statusText = 'Download concluído! Solicitando para instalar...';
+        });
+
+        // Solicita permissão e abre o instalador
+        var status = await Permission.requestInstallPackages.status;
+        if (!status.isGranted) {
+          status = await Permission.requestInstallPackages.request();
+        }
+
+        if (status.isGranted) {
+          await OpenFile.open(progress.filePath);
+          if (mounted) Navigator.of(context).pop();
+        } else {
+          setState(() {
+            _statusText = 'Permissão negada. Instale o arquivo manualmente.';
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        'Baixando Atualização',
+        style: TextStyle(color: widget.tema.cor2),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(_statusText, style: const TextStyle(fontSize: 14)),
+          const SizedBox(height: 20),
+          LinearProgressIndicator(
+            value: _progress,
+            backgroundColor: widget.tema.cor1.withOpacity(0.2),
+            color: widget.tema.cor1,
+            minHeight: 10,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            _downloadSubscription?.cancel();
+            Navigator.of(context).pop();
+          },
+          child: Text('Cancelar', style: TextStyle(color: widget.tema.cor2)),
+        ),
+      ],
+    );
+  }
 }

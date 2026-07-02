@@ -1,10 +1,26 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+class DownloadProgress {
+  final int count;
+  final int total;
+  final String status; // e.g., 'downloading', 'completed', 'error'
+  final String? filePath; // path to the downloaded file
+
+  DownloadProgress({
+    required this.count,
+    required this.total,
+    required this.status,
+    this.filePath,
+  });
+}
 
 class UpdateService {
   // Tornando a URL pública para ser acessível nos testes
@@ -154,6 +170,52 @@ class UpdateService {
     } else {
       print(
         '❌ Não é possível abrir a URL: $url. Verifique as configurações do AndroidManifest.xml (queries).',
+      );
+    }
+  }
+
+  Stream<DownloadProgress> downloadUpdate(String url) async* {
+    try {
+      final client = http.Client();
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await client.send(request);
+
+      final contentLength = response.contentLength;
+      if (contentLength == null) {
+        throw Exception('Não foi possível obter o tamanho do arquivo de atualização.');
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      final filePath = '${tempDir.path}/update.apk';
+      final file = File(filePath);
+      final sink = file.openWrite();
+
+      int received = 0;
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        yield DownloadProgress(
+          count: received,
+          total: contentLength,
+          status: 'downloading',
+        );
+      }
+
+      await sink.close();
+      client.close();
+
+      yield DownloadProgress(
+        count: contentLength,
+        total: contentLength,
+        status: 'completed',
+        filePath: filePath,
+      );
+    } catch (e) {
+      print('❌ Erro durante o download da atualização: $e');
+      yield DownloadProgress(
+        count: 0,
+        total: 0,
+        status: 'error',
       );
     }
   }
