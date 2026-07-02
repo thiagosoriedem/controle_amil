@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:controle_amil/services/update_service.dart';
 import 'package:flutter/material.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -13,6 +12,7 @@ import 'package:nsd/nsd.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:package_info_plus/package_info_plus.dart'; // Importar PackageInfoPlus
 import 'package:shelf_router/shelf_router.dart' as shelf_router;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -20,6 +20,7 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'models/convenio.dart';
 import 'models/consulta_registro.dart';
 import 'models/plantao_registro.dart';
+import 'package:controle_amil/services/update_service.dart'; // Mover import para cá
 import 'models/tema_customizado.dart';
 
 void main() {
@@ -159,28 +160,86 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _checkForUpdates() async {
     final updateService = UpdateService();
     final updateInfo = await updateService.checkForUpdate();
+    final PackageInfo packageInfo = await PackageInfo.fromPlatform(); // Obter a versão atual
+    final String currentVersion = packageInfo.version;
+
     if (updateInfo != null && mounted) {
-      _showUpdateDialog(updateInfo);
+      _showUpdateDialog(updateInfo, currentVersion);
     }
   }
 
-  void _showUpdateDialog(Map<String, String> updateInfo) {
+  void _showUpdateDialog(Map<String, String> updateInfo, String currentVersion) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Nova versão disponível: ${updateInfo['version']}'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        titlePadding: EdgeInsets.zero, // Remove o padding padrão do título
+        contentPadding: const EdgeInsets.fromLTRB(24.0, 0.0, 24.0, 24.0), // Ajusta o padding do conteúdo
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        title: Container(
+          padding: const EdgeInsets.all(16.0),
+          decoration: BoxDecoration(
+            color: temaAtual.cor1, // Usa a cor do tema atual
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.system_update_alt, color: Colors.white, size: 28),
+              const SizedBox(width: 12),
+              Text(
+                'Atualização Disponível!',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ],
+          ),
+        ),
         content: SingleChildScrollView(
-          child: Text(updateInfo['notes'] ?? 'Notas da versão não disponíveis.'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              Text(
+                'Uma nova versão do aplicativo está disponível.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 8),
+              Text('Versão atual: $currentVersion', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[700])),
+              Text(
+                'Nova versão: ${updateInfo['version']}',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall?.copyWith(fontWeight: FontWeight.bold, color: temaAtual.cor1),
+              ),
+              const SizedBox(height: 16),
+              const Text('Novidades:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(updateInfo['notes'] ?? 'Notas da versão não disponíveis.', style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Mais tarde'),
+            child: Text('Mais tarde', style: TextStyle(color: temaAtual.cor2)),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: temaAtual.cor1,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               final updateService = UpdateService();
               updateService.launchUpdate(updateInfo['url']!);
+              // Opcional: Você pode querer mostrar um SnackBar ou Toast
+              // informando que o download foi iniciado ou que o navegador foi aberto.
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Iniciando download da atualização...')),
+              );
+              // Fecha o diálogo após iniciar a atualização
               Navigator.of(context).pop();
             },
             child: const Text('Atualizar Agora'),
