@@ -132,6 +132,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // Tema customizado
   String _temaSelecionado = 'rosa';
+  String _appVersion = '';
 
   // Estado para o gráfico de pizza
   int _touchedIndex = -1;
@@ -159,6 +160,14 @@ class _DashboardPageState extends State<DashboardPage> {
     await _carregarDados();
     await _obterIpLocal();
     await _getDeviceName();
+
+    // Carrega a versão do app para ser exibida na UI
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _appVersion = packageInfo.version;
+      });
+    }
 
     // Só então inicia o servidor, que depende do nome do dispositivo
     _iniciarServidorSincronizacao();
@@ -1982,21 +1991,39 @@ class _DashboardPageState extends State<DashboardPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Row(
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(Icons.schedule_outlined, size: 20, color: Colors.black87),
-            SizedBox(width: 8),
-            Text(
+            const Icon(Icons.schedule_outlined, size: 20, color: Colors.black87),
+            const SizedBox(width: 8),
+             const Text(
               'Registro de Plantões',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
+             ),
+            
+              SizedBox(width: 8),
+            Container(
+              padding:   EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration:  BoxDecoration(
+                color: Colors.orange.shade100,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.orange.shade300, width: 1),
+              ),
+              child:  Text(
+                'BETA',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange.shade800,
+                ),
+              ),
             ),
           ],
         ),
-        // FIX: The duplicated 'if' statements below were consolidated
         if (_historicoPlantoes.isNotEmpty && _plantaoInicio == null)
           TextButton.icon(
             onPressed: _zerarHistoricoPlantoes,
@@ -3815,6 +3842,22 @@ class _DashboardPageState extends State<DashboardPage> {
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Fechar'),
+                  ),
+                ),
+                Padding(
+                  padding:  EdgeInsets.fromLTRB(16, 8, 8, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Versão $_appVersion',
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Fechar'),
+                      ),
+                    ],
                   ),
                 ),
               ],
