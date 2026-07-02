@@ -115,27 +115,33 @@ class UpdateService {
   }
 
   String? _getDownloadUrlForPlatform(List<dynamic> assets) {
-    String? platformIdentifier;
+    // Tenta encontrar o asset de download com base na extensão do arquivo para a plataforma.
+    // É crucial que os nomes dos arquivos na release do GitHub terminem com as extensões esperadas.
+    // Ex: 'controle_amil-1.0.0.apk', 'controle_amil-1.0.0-windows.exe', 'controle_amil-1.0.0.dmg'
+
+    List<String> targetExtensions = [];
     if (Platform.isAndroid) {
-      // Mais robusto: procura por '.apk', que é o padrão do build do Flutter.
-      // Antes estava 'android', que não existe no nome do arquivo 'app-release.apk'.
-      platformIdentifier = '.apk';
+      targetExtensions = ['.apk'];
     } else if (Platform.isWindows) {
-      platformIdentifier = 'windows';
+      // Para Windows, pode ser .msix (instalador moderno), .exe (instalador tradicional) ou .zip.
+      targetExtensions = ['.msix', '.exe', '.zip'];
     } else if (Platform.isLinux) {
-      platformIdentifier = 'linux';
+      // Para Linux, AppImage é uma boa opção portável.
+      targetExtensions = ['.appimage', '.deb', '.zip'];
     } else if (Platform.isMacOS) {
-      platformIdentifier = 'macos';
+      targetExtensions = ['.dmg', '.zip'];
     }
 
-    if (platformIdentifier != null) {
-      final asset = assets.firstWhere(
-        (asset) => (asset['name'] as String).toLowerCase().contains(
-          platformIdentifier!,
-        ),
-        orElse: () => null,
-      );
-      return asset != null ? asset['browser_download_url'] : null;
+    if (targetExtensions.isNotEmpty) {
+      for (final ext in targetExtensions) {
+        final asset = assets.firstWhere(
+          (asset) => (asset['name'] as String).toLowerCase().endsWith(ext),
+          orElse: () => null,
+        );
+        if (asset != null) {
+          return asset['browser_download_url'];
+        }
+      }
     }
 
     // For iOS and Web, we'll handle the URL separately or just open the main releases page.
@@ -143,6 +149,7 @@ class UpdateService {
       return 'https://apps.apple.com/app/id<YOUR_APP_ID>'; // Placeholder
     }
 
+    // Se nenhum asset específico for encontrado, retorna a página principal de releases.
     return 'https://github.com/thiagosoriedem/controle_amil/releases/latest';
   }
 
@@ -184,8 +191,10 @@ class UpdateService {
         );
       }
 
+      // Extrai o nome do arquivo da URL para salvar com o nome correto.
+      final fileName = Uri.parse(url).pathSegments.last;
       final tempDir = await getTemporaryDirectory();
-      final filePath = '${tempDir.path}/update.apk';
+      final filePath = '${tempDir.path}/$fileName';
       final file = File(filePath);
       final sink = file.openWrite();
 

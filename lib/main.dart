@@ -85,6 +85,7 @@ class _DashboardPageState extends State<DashboardPage> {
   // NOVO: Estado para o plantão ativo
   DateTime? _plantaoInicio;
   Timer? _plantaoTimer;
+  int _quickRegisterCount = 1;
   Duration _plantaoDuracao = Duration.zero;
   int _bonusHorasAdicionados = 0;
   int _ultimaHoraBonusAdicionada =
@@ -128,6 +129,7 @@ class _DashboardPageState extends State<DashboardPage> {
   // Sincronização Automática
   bool _syncAutomaticoAtivo = false;
   String? _parceiroSyncIp;
+  bool _isSyncing = false; // Flag para evitar loops de sincronização
   final bool _solicitacaoEmProgresso = false;
 
   // Tema customizado
@@ -279,7 +281,9 @@ class _DashboardPageState extends State<DashboardPage> {
             onPressed: () {
               Navigator.of(context).pop();
 
-              if (Platform.isAndroid) {
+              // Para Android e Desktop, inicia o download dentro do app.
+              // Para outras plataformas (iOS, Web), abre o link no navegador.
+              if (Platform.isAndroid || Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
                 showDialog(
                   context: context,
                   barrierDismissible: false,
@@ -289,7 +293,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 );
               } else {
-                // Para outras plataformas, mantém o comportamento de abrir o navegador
+                // Para iOS e Web, o comportamento padrão é abrir a URL.
                 final updateService = UpdateService();
                 updateService.launchUpdate(updateInfo['url']!);
               }
@@ -1379,7 +1383,10 @@ class _DashboardPageState extends State<DashboardPage> {
       try {
         final payload = await request.readAsString();
         final dados = jsonDecode(payload);
-        _importarDados(dados, mesclar: false); // No POST, sempre sobrescreve
+        // Alterado para sempre mesclar (merge) os dados recebidos,
+        // tornando a sincronização (manual ou automática) não-destrutiva.
+        // A lógica de merge "Last Write Wins" em _importarDados cuidará dos conflitos.
+        _importarDados(dados, mesclar: true);
         return Response.ok(
           jsonEncode({'status': 'sucesso', 'mensagem': 'Dados importados!'}),
           headers: {'content-type': 'application/json'},
@@ -1514,8 +1521,8 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           content: Text(
             modo == 'push'
-                ? 'Deseja ENVIAR os dados de "$_deviceName" e SOBRESCREVER os dados em "$nomeDispositivoRemoto"?'
-                : 'Deseja RECEBER os dados de "$nomeDispositivoRemoto" e SOBRESCREVER os dados em "$_deviceName"?',
+                ? 'Deseja ENVIAR os dados de "$_deviceName" para MESCLAR com os dados em "$nomeDispositivoRemoto"?'
+                : 'Deseja RECEBER os dados de "$nomeDispositivoRemoto" para MESCLAR com os dados em "$_deviceName"?',
           ),
           actions: [
             TextButton(
@@ -1525,10 +1532,10 @@ class _DashboardPageState extends State<DashboardPage> {
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+                backgroundColor: temaAtual.cor1,
                 foregroundColor: Colors.white,
               ),
-              child: const Text('Confirmar'),
+              child: const Text('Confirmar e Mesclar'),
             ),
           ],
         ),
@@ -1555,7 +1562,8 @@ class _DashboardPageState extends State<DashboardPage> {
       } else {
         // modo 'pull'
         // 4. Importar dados remotos, sobrescrevendo os locais
-        _importarDados(dadosRemoto, mesclar: false);
+        // Alterado para mesclar em vez de sobrescrever, tornando a operação segura.
+        _importarDados(dadosRemoto, mesclar: true);
       }
 
       // 5. Salva o IP do parceiro para sync automático e finaliza
@@ -1600,42 +1608,46 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _sincronizacaoAutomatica() async {
-    if (!_syncAutomaticoAtivo ||
+    // Adiciona a verificação da flag _isSyncing para evitar chamadas recursivas/paralelas.
+    if (_isSyncing ||
+        !_syncAutomaticoAtivo ||
         _parceiroSyncIp == null ||
         _parceiroSyncIp!.isEmpty) {
       return;
     }
 
-    print('🔄 Iniciando sincronização automática com $_parceiroSyncIp...');
-
+    // Garante que a flag seja resetada mesmo se ocorrer um erro.
     try {
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 3);
-
-      // 1. Buscar dados do parceiro
-      final requestGet = await client.getUrl(
-        Uri.parse('http://$_parceiroSyncIp:$_syncPort/exportar'),
+      _isSyncing = true;
+      print(
+        '🔄 Iniciando sincronização automática (PUSH) para $_parceiroSyncIp...',
       );
-      // Para sync automático, não precisamos de confirmação de diálogo,
-      // mas o servidor ainda precisa estar ativo.
-      final responseGet = await requestGet.close();
-      if (responseGet.statusCode != 200) return;
-      final bodyGet = await responseGet.transform(utf8.decoder).join();
-      final dadosRemoto = jsonDecode(bodyGet);
 
-      // 2. Enviar dados locais
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 5);
+
+      // 1. Enviar (PUSH) os dados locais para o parceiro.
+      // O servidor do parceiro agora está configurado para mesclar os dados recebidos.
       final requestPost = await client.postUrl(
         Uri.parse('http://$_parceiroSyncIp:$_syncPort/importar'),
       );
       requestPost.headers.set('content-type', 'application/json');
       requestPost.add(utf8.encode(jsonEncode(_exportarDados())));
-      await requestPost.close();
+      final responsePost = await requestPost.close();
 
-      // 3. Importar dados recebidos
-      _importarDados(dadosRemoto, mesclar: true); // Sync auto sempre mescla
-      print('✅ Sincronização automática concluída com sucesso.');
+      if (responsePost.statusCode == 200) {
+        print('✅ Sincronização automática (PUSH) enviada com sucesso.');
+      } else {
+        // Loga o erro se não conseguir conectar ou se o parceiro rejeitar.
+        print(
+          '⚠️ Falha na sincronização automática (PUSH): O parceiro respondeu com status ${responsePost.statusCode}',
+        );
+      }
     } catch (e) {
-      print('⚠️ Falha na sincronização automática: $e');
+      print('⚠️ Falha na conexão da sincronização automática: $e');
+    } finally {
+      // Reseta a flag para permitir a próxima sincronização.
+      _isSyncing = false;
     }
   }
 
@@ -1802,10 +1814,9 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _registrarPlantao() {
-    final adicionais =
-        int.tryParse(_pacientesAdicionaisController.text.trim()) ?? 0;
+    final adicionais = _quickRegisterCount;
 
-    if (adicionais <= 0) {
+    if (adicionais <= 0) { // Mantém a segurança, embora o contador comece em 1
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Nenhum paciente adicional para registrar.'),
@@ -1842,12 +1853,12 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       );
 
-      _pacientesAdicionaisController.clear();
+      _quickRegisterCount = 1; // Reseta o contador
     });
     _salvarDados();
 
     String snackbarMessage =
-        '✅ $adicionais paciente(s) adicionai(s) registrado(s)!';
+        '✅ $adicionais paciente(s) adicionais registrado(s)!';
     if (bonusConcedido) {
       snackbarMessage +=
           ' Bônus de R\$${_valorBonusPlantao.toStringAsFixed(2)} aplicado!';
@@ -1855,6 +1866,23 @@ class _DashboardPageState extends State<DashboardPage> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(snackbarMessage), backgroundColor: Colors.green),
+    );
+  }
+
+  void _removerPlantao(int index) {
+    if (index < 0 || index >= _historicoPlantoes.length) return;
+    final item = _historicoPlantoes[index];
+    setState(() {
+      _historicoPlantoes.removeAt(index);
+      _salvarDados();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Registro de plantão de R\$ ${item.valorTotal.toStringAsFixed(2)} removido.',
+        ),
+        backgroundColor: Colors.orange,
+      ),
     );
   }
 
@@ -2037,22 +2065,30 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildIniciarPlantaoUI() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 32.0),
-        child: ElevatedButton.icon(
-          onPressed: _iniciarPlantao,
-          icon: const Icon(Icons.play_arrow),
-          label: const Text('Iniciar Plantão'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: temaAtual.cor1,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-            textStyle: const TextStyle(fontSize: 16),
-          ),
+        padding: const EdgeInsets.symmetric(vertical: 16.0),
+        child: Column(
+          children: [
+            const Text("OU",
+                style: TextStyle(
+                    color: Colors.grey, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _iniciarPlantao,
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Iniciar Plantão Cronometrado'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: temaAtual.cor2,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                textStyle: const TextStyle(fontSize: 16),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-
   Widget _buildPlantaoAtivoUI() {
     final horaAtualIndex = _plantaoDuracao.inHours;
     final podeAdicionarBonus = horaAtualIndex > _ultimaHoraBonusAdicionada;
@@ -2166,6 +2202,79 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Widget _buildQuickRegisterUI() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Registro Rápido: Pacientes Adicionais',
+            style: TextStyle(
+                fontSize: 13, color: Colors.black87, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Use para registrar pacientes extras fora de um plantão cronometrado. O bônus por 5+ atendimentos/hora será verificado.',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              IconButton(
+                icon: Icon(Icons.remove_circle_outline,
+                    color: temaAtual.cor2, size: 30),
+                onPressed: () {
+                  setState(() {
+                    if (_quickRegisterCount > 1) _quickRegisterCount--;
+                  });
+                },
+              ),
+              Text(
+                '$_quickRegisterCount',
+                style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: temaAtual.cor1),
+              ),
+              IconButton(
+                icon: Icon(Icons.add_circle_outline,
+                    color: temaAtual.cor1, size: 30),
+                onPressed: () {
+                  setState(() {
+                    _quickRegisterCount++;
+                  });
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _registrarPlantao,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: temaAtual.cor1,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                textStyle: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              child: Text(
+                'Registrar $_quickRegisterCount Paciente(s)',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRegistroPlantoesCard(bool isMobile) {
     final hoje = DateTime.now();
     final plantoesHoje = _historicoPlantoes.where(
@@ -2195,63 +2304,12 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           _buildHeaderRegistroPlantoes(),
           const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(
-                0xFFF8F9FA,
-              ), // Cor de fundo suave idêntica à imagem
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Pacientes adicionais',
-                  style: TextStyle(fontSize: 13, color: Colors.black87),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _pacientesAdicionaisController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    hintText: '0',
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade200),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _registrarPlantao,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: temaAtual.cor1,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: const Text('Registrar'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _plantaoInicio == null
-              ? _buildIniciarPlantaoUI()
-              : _buildPlantaoAtivoUI(),
+          if (_plantaoInicio == null) ...[
+            _buildQuickRegisterUI(),
+            _buildIniciarPlantaoUI(),
+          ] else ...[
+            _buildPlantaoAtivoUI(),
+          ],
           const SizedBox(height: 24),
           _buildResumoPlantaoRow('Plantões hoje:', qtdHoje.toString()),
           const SizedBox(height: 12),
@@ -2268,6 +2326,38 @@ class _DashboardPageState extends State<DashboardPage> {
           _buildResumoPlantaoRow(
             'Receita mensal:',
             'R\$ ${receitaMes.toStringAsFixed(2).replaceAll('.', ',')}',
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Últimos Plantões Registrados',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: _historicoPlantoes.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text("Nenhum plantão registrado."),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _historicoPlantoes.length > 5
+                        ? 5
+                        : _historicoPlantoes.length,
+                    itemBuilder: (context, index) {
+                      final item = _historicoPlantoes[index];
+                      return _buildPlantaoHistoryTile(item, index);
+                    },
+                  ),
           ),
         ],
       ),
@@ -2287,6 +2377,62 @@ class _DashboardPageState extends State<DashboardPage> {
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
         ),
       ],
+    );
+  }
+
+  Widget _buildPlantaoHistoryTile(PlantaoRegistro item, int index) {
+    final bool isTimedSession = item.duracaoSegundos > 0;
+    final String title = isTimedSession
+        ? 'Plantão de ${_formatarDuracao(Duration(seconds: item.duracaoSegundos))}'
+        : 'Registro Rápido';
+
+    List<String> details = [];
+    if (item.bonusHoras > 0) {
+      details.add('${item.bonusHoras}x bônus');
+    }
+    if (item.pacientesAdicionais > 0) {
+      details.add('${item.pacientesAdicionais}x pac. extra');
+    }
+    final String subtitle = details.join(' | ');
+
+    return ListTile(
+      leading: Icon(
+        isTimedSession ? Icons.timer_outlined : Icons.add_task_outlined,
+        color: temaAtual.cor2,
+        size: 20,
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(fontSize: 11),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'R\$ ${item.valorTotal.toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${item.hora.toLocal().day.toString().padLeft(2, '0')}/${item.hora.toLocal().month.toString().padLeft(2, '0')} ${item.hora.toLocal().hour.toString().padLeft(2, '0')}:${item.hora.toLocal().minute.toString().padLeft(2, '0')}',
+                style: const TextStyle(fontSize: 10, color: Colors.grey),
+              ),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+            onPressed: () => _removerPlantao(index),
+            tooltip: 'Remover registro de plantão',
+          ),
+        ],
+      ),
     );
   }
 
@@ -2881,6 +3027,8 @@ class _DashboardPageState extends State<DashboardPage> {
                                 receitaMesBruta,
                                 metaMensal,
                               ),
+                              const SizedBox(height: 24),
+                              _buildConfiguracoesCard(isMobile),
                               const SizedBox(height: 24),
                               _buildRegistroPlantoesCard(isMobile),
                             ],
@@ -4968,22 +5116,30 @@ class _UpdateDownloadDialogState extends State<_UpdateDownloadDialog> {
 
       if (progress.status == 'completed' && progress.filePath != null) {
         setState(() {
-          _statusText = 'Download concluído! Solicitando para instalar...';
+          _statusText = 'Download concluído! Abrindo instalador...';
         });
 
-        // Solicita permissão e abre o instalador
-        var status = await Permission.requestInstallPackages.status;
-        if (!status.isGranted) {
-          status = await Permission.requestInstallPackages.request();
-        }
+        // Para Android, é preciso pedir permissão para instalar pacotes.
+        // Para Desktop, essa permissão não é necessária.
+        if (Platform.isAndroid) {
+          var status = await Permission.requestInstallPackages.status;
+          if (!status.isGranted) {
+            status = await Permission.requestInstallPackages.request();
+          }
 
-        if (status.isGranted) {
+          if (status.isGranted) {
+            await OpenFile.open(progress.filePath);
+            if (mounted) Navigator.of(context).pop();
+          } else {
+            setState(() {
+              _statusText = 'Permissão negada. Instale o arquivo manualmente.';
+            });
+          }
+        } else {
+          // Para Windows, macOS e Linux, apenas tentamos abrir o arquivo.
+          // O sistema operacional cuidará de executar o instalador (.exe, .msix, .dmg).
           await OpenFile.open(progress.filePath);
           if (mounted) Navigator.of(context).pop();
-        } else {
-          setState(() {
-            _statusText = 'Permissão negada. Instale o arquivo manualmente.';
-          });
         }
       }
     });
