@@ -54,6 +54,19 @@ dependencies:
   open_file: ^3.3.2
   flutter_dotenv: ^6.0.1
   msix: ^3.18.0
+  flutter_riverpod: ^2.6.1
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+  riverpod_annotation: ^2.6.1
+  get_it: ^8.0.3
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # JSON Serialization
+  json_annotation: ^4.9.0
+  freezed_annotation: ^2.4.4
 
 
 dev_dependencies:
@@ -62,6 +75,9 @@ dev_dependencies:
     sdk: flutter
   mockito: ^5.4.4
   build_runner: ^2.4.11
+  riverpod_generator: ^2.6.3
+  freezed: ^2.5.7
+  json_serializable: ^6.9.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

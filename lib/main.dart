@@ -323,11 +323,20 @@ class _DashboardPageState extends State<DashboardPage> {
     final consultasDoMes = _historicoConsultas
         .where((c) => c.hora.month == agora.month && c.hora.year == agora.year)
         .toList();
+    final plantoesDoMes = _historicoPlantoes
+        .where((p) => p.hora.month == agora.month && p.hora.year == agora.year)
+        .toList();
 
     // Se quiser ordenar da mais antiga para a mais nova no relatório
     consultasDoMes.sort((a, b) => a.hora.compareTo(b.hora));
+    plantoesDoMes.sort((a, b) => a.hora.compareTo(b.hora));
 
-    final receitaBruta = consultasDoMes.fold(0.0, (s, c) => s + c.valor);
+    final receitaBrutaConsultas =
+        consultasDoMes.fold(0.0, (s, c) => s + c.valor);
+    final receitaBrutaPlantoes =
+        plantoesDoMes.fold(0.0, (s, p) => s + p.valorTotal);
+    final receitaBruta = receitaBrutaConsultas + receitaBrutaPlantoes;
+
     final descontoImpostos = receitaBruta * taxaDesconto;
     final receitaLiquida = receitaBruta - descontoImpostos;
 
@@ -340,6 +349,10 @@ class _DashboardPageState extends State<DashboardPage> {
         (value) => value + consulta.valor,
         ifAbsent: () => consulta.valor,
       );
+    }
+    // Adiciona o faturamento total dos plantões como uma categoria separada
+    if (receitaBrutaPlantoes > 0) {
+      faturamentoPorFila['Plantões'] = receitaBrutaPlantoes;
     }
 
     // 2. Distribuição Horária (Gráfico de Barras)
@@ -455,7 +468,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   pw.Divider(color: corPrimaria, height: 20),
                   _buildResumoRowPDF(
                     'Total de Atendimentos:',
-                    '${consultasDoMes.length}',
+                  '${consultasDoMes.length} consultas + ${plantoesDoMes.length} plantões',
                   ),
                   _buildResumoRowPDF(
                     'Receita Bruta:',
@@ -555,6 +568,19 @@ class _DashboardPageState extends State<DashboardPage> {
                                   fontWeight: pw.FontWeight.bold,
                                 ),
                               ),
+                        // Adiciona a fatia para os plantões
+                        if (receitaBrutaPlantoes > 0)
+                          pw.PieDataSet(
+                            value: receitaBrutaPlantoes,
+                            color: PdfColors.orange, // Cor fixa para plantões
+                            legend:
+                                '${(receitaBrutaPlantoes / receitaBruta * 100).toStringAsFixed(0)}%',
+                            legendStyle: pw.TextStyle(
+                              fontSize: 10,
+                              color: PdfColors.white,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -570,18 +596,28 @@ class _DashboardPageState extends State<DashboardPage> {
                     pw.Wrap(
                       spacing: 16,
                       runSpacing: 6,
-                      children: _convenios.map((convenio) {
-                        final faturamento =
-                            faturamentoPorFila[convenio.nome] ?? 0.0;
-                        if (faturamento == 0) return pw.SizedBox.shrink();
-                        return _buildLegendaPizzaRowPDF(
-                          color: PdfColor.fromInt(convenio.cor.toARGB32()),
-                          texto:
-                              '${convenio.nome} - R\$ ${faturamento.toStringAsFixed(2)}',
-                        );
-                      }).toList(),
+                      children: [
+                        ..._convenios.map((convenio) {
+                          final faturamento =
+                              faturamentoPorFila[convenio.nome] ?? 0.0;
+                          if (faturamento == 0) return pw.SizedBox.shrink();
+                          return _buildLegendaPizzaRowPDF(
+                            color: PdfColor.fromInt(convenio.cor.toARGB32()),
+                            texto:
+                                '${convenio.nome} - R\$ ${faturamento.toStringAsFixed(2)}',
+                          );
+                        }),
+                        // Adiciona a legenda para os plantões
+                        if (receitaBrutaPlantoes > 0)
+                          _buildLegendaPizzaRowPDF(
+                            color: PdfColors.orange,
+                            texto:
+                                'Plantões - R\$ ${receitaBrutaPlantoes.toStringAsFixed(2)}',
+                          ),
+                      ],
                     ),
-                  ] else
+                  ] 
+                  else
                     pw.Text(
                       'Nenhum faturamento no mês.',
                       style: const pw.TextStyle(color: PdfColors.grey),
@@ -676,6 +712,54 @@ class _DashboardPageState extends State<DashboardPage> {
                       c.valor.toStringAsFixed(2).replaceAll('.', ','),
                     ],
                   ),
+                ],
+              ),
+            pw.SizedBox(height: 1.0 * PdfPageFormat.cm),
+
+            // Tabela de Histórico de Plantões
+            pw.Text(
+              'Histórico de Plantões',
+              style: pw.TextStyle(
+                fontSize: 20,
+                fontWeight: pw.FontWeight.bold,
+                color: corPrimaria,
+              ),
+            ),
+            pw.SizedBox(height: 0.5 * PdfPageFormat.cm),
+            if (plantoesDoMes.isEmpty)
+              pw.Text(
+                'Nenhum plantão registrado neste mês.',
+                style: const pw.TextStyle(color: PdfColors.grey),
+              )
+            else
+              pw.Table.fromTextArray(
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.white,
+                ),
+                headerDecoration: pw.BoxDecoration(color: corPrimaria),
+                cellHeight: 25,
+                cellAlignments: {
+                  0: pw.Alignment.centerLeft,
+                  1: pw.Alignment.center,
+                  2: pw.Alignment.centerLeft,
+                  3: pw.Alignment.centerRight,
+                },
+                headers: <String>['Data', 'Hora', 'Tipo/Detalhes', 'Valor (R\$)'],
+                data: <List<String>>[
+                  ...plantoesDoMes.map((PlantaoRegistro p) {
+                    final isTimed = p.duracaoSegundos > 0;
+                    final tipo = isTimed ? 'Cronometrado' : 'Rápido';
+                    final detalhes = isTimed
+                        ? '${_formatarDuracao(Duration(seconds: p.duracaoSegundos))} | ${p.bonusHoras} bônus | ${p.pacientesAdicionais} extras'
+                        : '${p.pacientesAdicionais} extras | ${p.bonusHoras > 0 ? 'Com bônus' : 'Sem bônus'}';
+                    return [
+                      '${p.hora.day.toString().padLeft(2, "0")}/${p.hora.month.toString().padLeft(2, "0")}',
+                      '${p.hora.hour.toString().padLeft(2, "0")}:${p.hora.minute.toString().padLeft(2, "0")}',
+                      '$tipo: $detalhes',
+                      p.valorTotal.toStringAsFixed(2).replaceAll('.', ','),
+                    ];
+                  }),
                 ],
               ),
           ];
@@ -2024,24 +2108,23 @@ class _DashboardPageState extends State<DashboardPage> {
           children: [
             const Icon(Icons.schedule_outlined, size: 20, color: Colors.black87),
             const SizedBox(width: 8),
-             const Text(
+            const Text(
               'Registro de Plantões',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
-             ),
-            
-              SizedBox(width: 8),
+            ),
+            const SizedBox(width: 8),
             Container(
-              padding:   EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration:  BoxDecoration(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
                 color: Colors.orange.shade100,
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: Colors.orange.shade300, width: 1),
               ),
-              child:  Text(
+              child: Text(
                 'BETA',
                 style: TextStyle(
                   fontSize: 10,
@@ -2552,13 +2635,19 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   // Contadores por categoria
-  int get totalConsultasHoje {
+  int get totalAtendimentosHoje {
     final hoje = DateTime.now();
-    return _historicoConsultas.where((c) {
+    final atendimentosConsultas = _historicoConsultas.where((c) {
       return c.hora.day == hoje.day &&
           c.hora.month == hoje.month &&
           c.hora.year == hoje.year;
     }).length;
+    final atendimentosPlantoes = _historicoPlantoes.where((p) {
+      return p.hora.day == hoje.day &&
+          p.hora.month == hoje.month &&
+          p.hora.year == hoje.year;
+    }).fold(0, (sum, p) => sum + p.pacientesAdicionais); // Sums extra patients
+    return atendimentosConsultas + atendimentosPlantoes;
   }
 
   int totalPorFilaHoje(String nomeConvenio) {
@@ -2574,28 +2663,47 @@ class _DashboardPageState extends State<DashboardPage> {
   // Soma de faturamento bruto
   double get receitaHojeBruta {
     final hoje = DateTime.now();
-    final consultasDeHoje = _historicoConsultas.where((c) {
+    final receitaConsultas = _historicoConsultas.where((c) {
       return c.hora.day == hoje.day &&
           c.hora.month == hoje.month &&
           c.hora.year == hoje.year;
-    });
-    return consultasDeHoje.fold(0.0, (soma, item) => soma + item.valor);
+    }).fold(0.0, (soma, item) => soma + item.valor);
+
+    final receitaPlantoes = _historicoPlantoes.where((p) {
+      return p.hora.day == hoje.day &&
+          p.hora.month == hoje.month &&
+          p.hora.year == hoje.year;
+    }).fold(0.0, (soma, item) => soma + item.valorTotal);
+
+    return receitaConsultas + receitaPlantoes;
   }
 
   double get receitaMesBruta {
     final hoje = DateTime.now();
-    return _historicoConsultas
+    final receitaConsultas = _historicoConsultas
         .where((c) {
           return c.hora.year == hoje.year && c.hora.month == hoje.month;
         })
         .fold(0.0, (soma, item) => soma + item.valor);
+
+    final receitaPlantoes = _historicoPlantoes
+        .where((p) {
+          return p.hora.year == hoje.year && p.hora.month == hoje.month;
+        })
+        .fold(0.0, (soma, item) => soma + item.valorTotal);
+
+    return receitaConsultas + receitaPlantoes;
   }
 
-  int get totalConsultasMes {
+  int get totalAtendimentosMes {
     final hoje = DateTime.now();
-    return _historicoConsultas.where((c) {
+    final atendimentosConsultas = _historicoConsultas.where((c) {
       return c.hora.year == hoje.year && c.hora.month == hoje.month;
     }).length;
+    final atendimentosPlantoes = _historicoPlantoes.where((p) {
+      return p.hora.year == hoje.year && p.hora.month == hoje.month;
+    }).fold(0, (sum, p) => sum + p.pacientesAdicionais);
+    return atendimentosConsultas + atendimentosPlantoes;
   }
 
   // Horas ativas com base nos registros distintos
@@ -2613,7 +2721,7 @@ class _DashboardPageState extends State<DashboardPage> {
   // Média de atendimentos por hora
   double get mediaHora {
     if (horasAtivas == 0) return 0.0;
-    return totalConsultasHoje / horasAtivas;
+    return totalAtendimentosHoje / horasAtivas;
   }
 
   String detalhesPorFaixaHoraria(int horaInicio, DateTime data) {
@@ -2768,8 +2876,8 @@ class _DashboardPageState extends State<DashboardPage> {
                             children: [
                               Expanded(
                                 child: _buildMetricCard(
-                                  'Consultas Hoje',
-                                  '$totalConsultasHoje',
+                                  'Atendimentos Hoje',
+                                  '$totalAtendimentosHoje',
                                   'pacientes',
                                   Icons.groups_outlined,
                                   isMobile,
@@ -2792,8 +2900,8 @@ class _DashboardPageState extends State<DashboardPage> {
                             children: [
                               Expanded(
                                 child: _buildMetricCard(
-                                  'Consultas Mês',
-                                  '$totalConsultasMes',
+                                  'Atendimentos Mês',
+                                  '$totalAtendimentosMes',
                                   'acumulado',
                                   Icons.calendar_today_outlined,
                                   isMobile,
@@ -2819,8 +2927,8 @@ class _DashboardPageState extends State<DashboardPage> {
                         children: [
                           Expanded(
                             child: _buildMetricCard(
-                              'Consultas Hoje',
-                              '$totalConsultasHoje',
+                              'Atendimentos Hoje',
+                              '$totalAtendimentosHoje',
                               'pacientes',
                               Icons.groups_outlined,
                               isMobile,
@@ -2839,8 +2947,8 @@ class _DashboardPageState extends State<DashboardPage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: _buildMetricCard(
-                              'Consultas Mês',
-                              '$totalConsultasMes',
+                              'Atendimentos Mês',
+                              '$totalAtendimentosMes',
                               'acumulado',
                               Icons.calendar_today_outlined,
                               isMobile,
@@ -3353,6 +3461,21 @@ class _DashboardPageState extends State<DashboardPage> {
           !diaConsulta.isAfter(normalizedEnd)) {
         if (receitaPorDia.containsKey(diaConsulta)) {
           receitaPorDia.update(diaConsulta, (value) => value + consulta.valor);
+        }
+      }
+    }
+
+    // Adiciona a receita dos plantões
+    for (var plantao in _historicoPlantoes) {
+      final diaPlantao = DateTime(
+        plantao.hora.year,
+        plantao.hora.month,
+        plantao.hora.day,
+      );
+      if (!diaPlantao.isBefore(normalizedStart) &&
+          !diaPlantao.isAfter(normalizedEnd)) {
+        if (receitaPorDia.containsKey(diaPlantao)) {
+          receitaPorDia.update(diaPlantao, (value) => value + plantao.valorTotal);
         }
       }
     }
@@ -4008,22 +4131,16 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ),
 
-                // Botão Fechar
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Fechar'),
-                  ),
-                ),
+                // Botão Fechar e Versão
                 Padding(
-                  padding:  EdgeInsets.fromLTRB(16, 8, 8, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         'Versão $_appVersion',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                        style:
+                            TextStyle(fontSize: 11, color: Colors.grey[600]),
                       ),
                       TextButton(
                         onPressed: () => Navigator.pop(context),
@@ -4960,11 +5077,23 @@ class _DashboardPageState extends State<DashboardPage> {
           c.hora.month == data.month &&
           c.hora.year == data.year,
     );
+    final plantoesDoDia = _historicoPlantoes.where(
+      (p) =>
+          p.hora.day == data.day &&
+          p.hora.month == data.month &&
+          p.hora.year == data.year,
+    );
 
-    final double faturamentoTotal = consultasDoDia.fold(
+    final faturamentoConsultas = consultasDoDia.fold(
       0.0,
       (soma, item) => soma + item.valor,
     );
+    final faturamentoPlantoes = plantoesDoDia.fold(
+      0.0,
+      (soma, item) => soma + item.valorTotal,
+    );
+
+    final double faturamentoTotal = faturamentoConsultas + faturamentoPlantoes;
 
     if (faturamentoTotal == 0) {
       return const Padding(
@@ -5015,6 +5144,26 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     }
 
+    // Adiciona a fatia para os plantões
+    if (faturamentoPlantoes > 0) {
+      final isTouched = sectionIndex == _touchedIndex;
+      sections.add(
+        PieChartSectionData(
+          color: Colors.orange, // Cor fixa para plantões
+          value: faturamentoPlantoes,
+          title: isTouched
+              ? 'R\$${faturamentoPlantoes.toStringAsFixed(0)}'
+              : '${(faturamentoPlantoes / faturamentoTotal * 100).toStringAsFixed(0)}%',
+          radius: isTouched ? 60.0 : 50.0,
+          titleStyle: TextStyle(
+            fontSize: isTouched ? 14 : 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      );
+    }
+
     return Row(
       children: <Widget>[
         Expanded(
@@ -5054,19 +5203,33 @@ class _DashboardPageState extends State<DashboardPage> {
           mainAxisSize: MainAxisSize.max,
           mainAxisAlignment: MainAxisAlignment.end,
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: _convenios.map((convenio) {
-            final faturamento = faturamentoPorFila[convenio.nome] ?? 0.0;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 4.0),
-              child: _buildIndicator(
-                color: convenio.cor,
-                text:
-                    '${convenio.nome} (R\$ ${faturamento.toStringAsFixed(2)})',
-                isSquare: true,
-                isMobile: isMobile,
+          children: [
+            ..._convenios.map((convenio) {
+              final faturamento = faturamentoPorFila[convenio.nome] ?? 0.0;
+              if (faturamento <= 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: _buildIndicator(
+                  color: convenio.cor,
+                  text:
+                      '${convenio.nome} (R\$ ${faturamento.toStringAsFixed(2)})',
+                  isSquare: true,
+                  isMobile: isMobile,
+                ),
+              );
+            }),
+            if (faturamentoPlantoes > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: _buildIndicator(
+                  color: Colors.orange,
+                  text:
+                      'Plantões (R\$ ${faturamentoPlantoes.toStringAsFixed(2)})',
+                  isSquare: true,
+                  isMobile: isMobile,
+                ),
               ),
-            );
-          }).toList(),
+          ],
         ),
       ],
     );
