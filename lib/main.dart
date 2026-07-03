@@ -79,13 +79,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // --- Estado do Registro de Plantões ---
   final List<PlantaoRegistro> _historicoPlantoes = [];
-  final TextEditingController _pacientesAdicionaisController =
-      TextEditingController();
 
   // NOVO: Estado para o plantão ativo
   DateTime? _plantaoInicio;
   Timer? _plantaoTimer;
   int _quickRegisterCount = 1;
+  int _timedShiftExtraPatientsCount = 0;
   Duration _plantaoDuracao = Duration.zero;
   int _bonusHorasAdicionados = 0;
   int _ultimaHoraBonusAdicionada =
@@ -283,7 +282,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
               // Para Android e Desktop, inicia o download dentro do app.
               // Para outras plataformas (iOS, Web), abre o link no navegador.
-              if (Platform.isAndroid || Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+              if (Platform.isAndroid ||
+                  Platform.isWindows ||
+                  Platform.isLinux ||
+                  Platform.isMacOS) {
                 showDialog(
                   context: context,
                   barrierDismissible: false,
@@ -331,10 +333,14 @@ class _DashboardPageState extends State<DashboardPage> {
     consultasDoMes.sort((a, b) => a.hora.compareTo(b.hora));
     plantoesDoMes.sort((a, b) => a.hora.compareTo(b.hora));
 
-    final receitaBrutaConsultas =
-        consultasDoMes.fold(0.0, (s, c) => s + c.valor);
-    final receitaBrutaPlantoes =
-        plantoesDoMes.fold(0.0, (s, p) => s + p.valorTotal);
+    final receitaBrutaConsultas = consultasDoMes.fold(
+      0.0,
+      (s, c) => s + c.valor,
+    );
+    final receitaBrutaPlantoes = plantoesDoMes.fold(
+      0.0,
+      (s, p) => s + p.valorTotal,
+    );
     final receitaBruta = receitaBrutaConsultas + receitaBrutaPlantoes;
 
     final descontoImpostos = receitaBruta * taxaDesconto;
@@ -468,7 +474,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   pw.Divider(color: corPrimaria, height: 20),
                   _buildResumoRowPDF(
                     'Total de Atendimentos:',
-                  '${consultasDoMes.length} consultas + ${plantoesDoMes.length} plantões',
+                    '${consultasDoMes.length} consultas + ${plantoesDoMes.length} plantões',
                   ),
                   _buildResumoRowPDF(
                     'Receita Bruta:',
@@ -496,11 +502,11 @@ class _DashboardPageState extends State<DashboardPage> {
                       'R\$ ${receitaLiquida.toStringAsFixed(2)}',
                       labelStyle: pw.TextStyle(
                         fontWeight: pw.FontWeight.bold,
-                        color: corSecundaria,
+                        color: corFundoClaro,
                       ),
                       valorStyle: pw.TextStyle(
                         fontWeight: pw.FontWeight.bold,
-                        color: corSecundaria,
+                        color: corFundoClaro,
                         fontSize: 14,
                       ),
                     ),
@@ -568,19 +574,19 @@ class _DashboardPageState extends State<DashboardPage> {
                                   fontWeight: pw.FontWeight.bold,
                                 ),
                               ),
-                        // Adiciona a fatia para os plantões
-                        if (receitaBrutaPlantoes > 0)
-                          pw.PieDataSet(
-                            value: receitaBrutaPlantoes,
-                            color: PdfColors.orange, // Cor fixa para plantões
-                            legend:
-                                '${(receitaBrutaPlantoes / receitaBruta * 100).toStringAsFixed(0)}%',
-                            legendStyle: pw.TextStyle(
-                              fontSize: 10,
-                              color: PdfColors.white,
-                              fontWeight: pw.FontWeight.bold,
+                          // Adiciona a fatia para os plantões
+                          if (receitaBrutaPlantoes > 0)
+                            pw.PieDataSet(
+                              value: receitaBrutaPlantoes,
+                              color: PdfColors.orange, // Cor fixa para plantões
+                              legend:
+                                  '${(receitaBrutaPlantoes / receitaBruta * 100).toStringAsFixed(0)}%',
+                              legendStyle: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.white,
+                                fontWeight: pw.FontWeight.bold,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -616,8 +622,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                       ],
                     ),
-                  ] 
-                  else
+                  ] else
                     pw.Text(
                       'Nenhum faturamento no mês.',
                       style: const pw.TextStyle(color: PdfColors.grey),
@@ -745,7 +750,12 @@ class _DashboardPageState extends State<DashboardPage> {
                   2: pw.Alignment.centerLeft,
                   3: pw.Alignment.centerRight,
                 },
-                headers: <String>['Data', 'Hora', 'Tipo/Detalhes', 'Valor (R\$)'],
+                headers: <String>[
+                  'Data',
+                  'Hora',
+                  'Tipo/Detalhes',
+                  'Valor (R\$)',
+                ],
                 data: <List<String>>[
                   ...plantoesDoMes.map((PlantaoRegistro p) {
                     final isTimed = p.duracaoSegundos > 0;
@@ -1172,7 +1182,10 @@ class _DashboardPageState extends State<DashboardPage> {
     };
   }
 
-  void _importarDados(Map<String, dynamic> dados, {bool mesclar = true}) {
+  Future<void> _importarDados(
+    Map<String, dynamic> dados, {
+    bool mesclar = true,
+  }) async {
     // --- LÓGICA DE MERGE DE DADOS ---
     final List<ConsultaRegistro> registrosRemotos = [];
     final List<PlantaoRegistro> plantoesRemotos = [];
@@ -1267,11 +1280,12 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     final List<ConsultaRegistro> listaFinal;
+    final List<PlantaoRegistro> plantoesFinais;
     final List<Convenio> conveniosFinais;
 
     if (mesclar) {
       // --- LÓGICA DE MERGE INTELIGENTE (Last Write Wins) ---
-      // Combina as listas e usa um mapa para resolver conflitos.
+      // 1. Merge de Consultas
       final historicoCombinado = [..._historicoConsultas, ...registrosRemotos];
       final mapaRegistros = <String, ConsultaRegistro>{};
 
@@ -1286,7 +1300,21 @@ class _DashboardPageState extends State<DashboardPage> {
       }
       listaFinal = mapaRegistros.values.toList();
 
-      // Merge de Convênios, priorizando o remoto em caso de conflito de ID
+      // 2. Merge de Plantões
+      final plantoesCombinados = [..._historicoPlantoes, ...plantoesRemotos];
+      final mapaPlantoes = <String, PlantaoRegistro>{};
+
+      for (final novoPlantao in plantoesCombinados) {
+        final plantaoExistente = mapaPlantoes[novoPlantao.id];
+
+        if (plantaoExistente == null ||
+            novoPlantao.modificadoEm.isAfter(plantaoExistente.modificadoEm)) {
+          mapaPlantoes[novoPlantao.id] = novoPlantao;
+        }
+      }
+      plantoesFinais = mapaPlantoes.values.toList();
+
+      // 3. Merge de Convênios, priorizando o remoto em caso de conflito de ID
       final mapaConvenios = <String, Convenio>{};
       // Adiciona os locais primeiro
       for (final convenio in _convenios) {
@@ -1300,13 +1328,18 @@ class _DashboardPageState extends State<DashboardPage> {
     } else {
       // Apenas substitui os dados locais pelos remotos
       listaFinal = registrosRemotos;
+      plantoesFinais = plantoesRemotos;
       conveniosFinais = conveniosRemotos;
     }
     listaFinal.sort((a, b) => b.hora.compareTo(a.hora));
+    plantoesFinais.sort((a, b) => b.hora.compareTo(a.hora));
 
     setState(() {
       _historicoConsultas.clear();
       _historicoConsultas.addAll(listaFinal);
+
+      _historicoPlantoes.clear();
+      _historicoPlantoes.addAll(plantoesFinais);
 
       _convenios.clear();
       _convenios.addAll(conveniosFinais);
@@ -1329,7 +1362,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       );
     }
-    _salvarDados(); // Salva os dados importados
+    await _salvarDados(); // Salva os dados importados
   }
 
   Future<String> _getRemoteIp(Request request) async {
@@ -1470,7 +1503,7 @@ class _DashboardPageState extends State<DashboardPage> {
         // Alterado para sempre mesclar (merge) os dados recebidos,
         // tornando a sincronização (manual ou automática) não-destrutiva.
         // A lógica de merge "Last Write Wins" em _importarDados cuidará dos conflitos.
-        _importarDados(dados, mesclar: true);
+        await _importarDados(dados, mesclar: true);
         return Response.ok(
           jsonEncode({'status': 'sucesso', 'mensagem': 'Dados importados!'}),
           headers: {'content-type': 'application/json'},
@@ -1647,7 +1680,7 @@ class _DashboardPageState extends State<DashboardPage> {
         // modo 'pull'
         // 4. Importar dados remotos, sobrescrevendo os locais
         // Alterado para mesclar em vez de sobrescrever, tornando a operação segura.
-        _importarDados(dadosRemoto, mesclar: true);
+        await _importarDados(dadosRemoto, mesclar: true);
       }
 
       // 5. Salva o IP do parceiro para sync automático e finaliza
@@ -1874,7 +1907,7 @@ class _DashboardPageState extends State<DashboardPage> {
       final jsonString = await file.readAsString();
       final dados = jsonDecode(jsonString);
 
-      _importarDados(dados);
+      await _importarDados(dados);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1900,7 +1933,8 @@ class _DashboardPageState extends State<DashboardPage> {
   void _registrarPlantao() {
     final adicionais = _quickRegisterCount;
 
-    if (adicionais <= 0) { // Mantém a segurança, embora o contador comece em 1
+    if (adicionais <= 0) {
+      // Mantém a segurança, embora o contador comece em 1
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Nenhum paciente adicional para registrar.'),
@@ -1985,7 +2019,7 @@ class _DashboardPageState extends State<DashboardPage> {
       _plantaoDuracao = Duration.zero;
       _bonusHorasAdicionados = 0;
       _ultimaHoraBonusAdicionada = -1;
-      _pacientesAdicionaisController.clear();
+      _timedShiftExtraPatientsCount = 0;
 
       _plantaoTimer?.cancel(); // Cancela timer anterior se houver
       _plantaoTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -2026,8 +2060,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void _finalizarEregistrarPlantao() {
     _plantaoTimer?.cancel();
 
-    final adicionais =
-        int.tryParse(_pacientesAdicionaisController.text.trim()) ?? 0;
+    final adicionais = _timedShiftExtraPatientsCount;
     final valorTotal =
         (_bonusHorasAdicionados * _valorBonusPlantao) +
         (adicionais * _valorAdicionalPlantao);
@@ -2052,7 +2085,7 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _historicoPlantoes.insert(0, novoPlantao);
       _plantaoInicio = null; // Reseta o estado do plantão
-      _pacientesAdicionaisController.clear();
+      _timedShiftExtraPatientsCount = 0;
     });
     _salvarDados();
 
@@ -2106,7 +2139,11 @@ class _DashboardPageState extends State<DashboardPage> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Icon(Icons.schedule_outlined, size: 20, color: Colors.black87),
+            const Icon(
+              Icons.schedule_outlined,
+              size: 20,
+              color: Colors.black87,
+            ),
             const SizedBox(width: 8),
             const Text(
               'Registro de Plantões',
@@ -2151,9 +2188,10 @@ class _DashboardPageState extends State<DashboardPage> {
         padding: const EdgeInsets.symmetric(vertical: 16.0),
         child: Column(
           children: [
-            const Text("OU",
-                style: TextStyle(
-                    color: Colors.grey, fontWeight: FontWeight.bold)),
+            const Text(
+              "OU",
+              style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             ElevatedButton.icon(
               onPressed: _iniciarPlantao,
@@ -2162,8 +2200,10 @@ class _DashboardPageState extends State<DashboardPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: temaAtual.cor2,
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 16,
+                ),
                 textStyle: const TextStyle(fontSize: 16),
               ),
             ),
@@ -2172,6 +2212,7 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
   }
+
   Widget _buildPlantaoAtivoUI() {
     final horaAtualIndex = _plantaoDuracao.inHours;
     final podeAdicionarBonus = horaAtualIndex > _ultimaHoraBonusAdicionada;
@@ -2229,28 +2270,45 @@ class _DashboardPageState extends State<DashboardPage> {
           Text(
             'Pacientes adicionais (R\$ ${_valorAdicionalPlantao.toStringAsFixed(2)} cada)',
           ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _pacientesAdicionaisController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              hintText: '0',
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.remove_circle_outline,
+                  color: temaAtual.cor2,
+                  size: 30,
+                ),
+                onPressed: () {
+                  setState(() {
+                    if (_timedShiftExtraPatientsCount > 0) {
+                      _timedShiftExtraPatientsCount--;
+                    }
+                  });
+                },
               ),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade200),
+              Text(
+                '$_timedShiftExtraPatientsCount',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: temaAtual.cor1,
+                ),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade200),
+              IconButton(
+                icon: Icon(
+                  Icons.add_circle_outline,
+                  color: temaAtual.cor1,
+                  size: 30,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _timedShiftExtraPatientsCount++;
+                  });
+                },
               ),
-            ),
+            ],
           ),
           const SizedBox(height: 24),
 
@@ -2299,7 +2357,10 @@ class _DashboardPageState extends State<DashboardPage> {
           const Text(
             'Registro Rápido: Pacientes Adicionais',
             style: TextStyle(
-                fontSize: 13, color: Colors.black87, fontWeight: FontWeight.bold),
+              fontSize: 13,
+              color: Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -2311,8 +2372,11 @@ class _DashboardPageState extends State<DashboardPage> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               IconButton(
-                icon: Icon(Icons.remove_circle_outline,
-                    color: temaAtual.cor2, size: 30),
+                icon: Icon(
+                  Icons.remove_circle_outline,
+                  color: temaAtual.cor2,
+                  size: 30,
+                ),
                 onPressed: () {
                   setState(() {
                     if (_quickRegisterCount > 1) _quickRegisterCount--;
@@ -2322,13 +2386,17 @@ class _DashboardPageState extends State<DashboardPage> {
               Text(
                 '$_quickRegisterCount',
                 style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: temaAtual.cor1),
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: temaAtual.cor1,
+                ),
               ),
               IconButton(
-                icon: Icon(Icons.add_circle_outline,
-                    color: temaAtual.cor1, size: 30),
+                icon: Icon(
+                  Icons.add_circle_outline,
+                  color: temaAtual.cor1,
+                  size: 30,
+                ),
                 onPressed: () {
                   setState(() {
                     _quickRegisterCount++;
@@ -2348,9 +2416,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 textStyle: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              child: Text(
-                'Registrar $_quickRegisterCount Paciente(s)',
-              ),
+              child: Text('Registrar $_quickRegisterCount Paciente(s)'),
             ),
           ),
         ],
@@ -2413,10 +2479,7 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 24),
           const Text(
             'Últimos Plantões Registrados',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),
           Container(
@@ -2488,10 +2551,7 @@ class _DashboardPageState extends State<DashboardPage> {
         title,
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
       ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(fontSize: 11),
-      ),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 11)),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2501,7 +2561,10 @@ class _DashboardPageState extends State<DashboardPage> {
             children: [
               Text(
                 'R\$ ${item.valorTotal.toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               Text(
                 '${item.hora.toLocal().day.toString().padLeft(2, '0')}/${item.hora.toLocal().month.toString().padLeft(2, '0')} ${item.hora.toLocal().hour.toString().padLeft(2, '0')}:${item.hora.toLocal().minute.toString().padLeft(2, '0')}',
@@ -2642,11 +2705,16 @@ class _DashboardPageState extends State<DashboardPage> {
           c.hora.month == hoje.month &&
           c.hora.year == hoje.year;
     }).length;
-    final atendimentosPlantoes = _historicoPlantoes.where((p) {
-      return p.hora.day == hoje.day &&
-          p.hora.month == hoje.month &&
-          p.hora.year == hoje.year;
-    }).fold(0, (sum, p) => sum + p.pacientesAdicionais); // Sums extra patients
+    final atendimentosPlantoes = _historicoPlantoes
+        .where((p) {
+          return p.hora.day == hoje.day &&
+              p.hora.month == hoje.month &&
+              p.hora.year == hoje.year;
+        })
+        .fold(
+          0,
+          (sum, p) => sum + p.pacientesAdicionais,
+        ); // Sums extra patients
     return atendimentosConsultas + atendimentosPlantoes;
   }
 
@@ -2663,17 +2731,21 @@ class _DashboardPageState extends State<DashboardPage> {
   // Soma de faturamento bruto
   double get receitaHojeBruta {
     final hoje = DateTime.now();
-    final receitaConsultas = _historicoConsultas.where((c) {
-      return c.hora.day == hoje.day &&
-          c.hora.month == hoje.month &&
-          c.hora.year == hoje.year;
-    }).fold(0.0, (soma, item) => soma + item.valor);
+    final receitaConsultas = _historicoConsultas
+        .where((c) {
+          return c.hora.day == hoje.day &&
+              c.hora.month == hoje.month &&
+              c.hora.year == hoje.year;
+        })
+        .fold(0.0, (soma, item) => soma + item.valor);
 
-    final receitaPlantoes = _historicoPlantoes.where((p) {
-      return p.hora.day == hoje.day &&
-          p.hora.month == hoje.month &&
-          p.hora.year == hoje.year;
-    }).fold(0.0, (soma, item) => soma + item.valorTotal);
+    final receitaPlantoes = _historicoPlantoes
+        .where((p) {
+          return p.hora.day == hoje.day &&
+              p.hora.month == hoje.month &&
+              p.hora.year == hoje.year;
+        })
+        .fold(0.0, (soma, item) => soma + item.valorTotal);
 
     return receitaConsultas + receitaPlantoes;
   }
@@ -2700,9 +2772,11 @@ class _DashboardPageState extends State<DashboardPage> {
     final atendimentosConsultas = _historicoConsultas.where((c) {
       return c.hora.year == hoje.year && c.hora.month == hoje.month;
     }).length;
-    final atendimentosPlantoes = _historicoPlantoes.where((p) {
-      return p.hora.year == hoje.year && p.hora.month == hoje.month;
-    }).fold(0, (sum, p) => sum + p.pacientesAdicionais);
+    final atendimentosPlantoes = _historicoPlantoes
+        .where((p) {
+          return p.hora.year == hoje.year && p.hora.month == hoje.month;
+        })
+        .fold(0, (sum, p) => sum + p.pacientesAdicionais);
     return atendimentosConsultas + atendimentosPlantoes;
   }
 
@@ -3475,7 +3549,10 @@ class _DashboardPageState extends State<DashboardPage> {
       if (!diaPlantao.isBefore(normalizedStart) &&
           !diaPlantao.isAfter(normalizedEnd)) {
         if (receitaPorDia.containsKey(diaPlantao)) {
-          receitaPorDia.update(diaPlantao, (value) => value + plantao.valorTotal);
+          receitaPorDia.update(
+            diaPlantao,
+            (value) => value + plantao.valorTotal,
+          );
         }
       }
     }
@@ -3688,7 +3765,10 @@ class _DashboardPageState extends State<DashboardPage> {
                       controller: scrollController,
                       children: [
                         ListTile(
-                          leading: Icon(Icons.palette_outlined, color: temaAtual.cor1),
+                          leading: Icon(
+                            Icons.palette_outlined,
+                            color: temaAtual.cor1,
+                          ),
                           title: const Text('Alterar Tema'),
                           onTap: () {
                             Navigator.pop(context); // Fecha a modal de config
@@ -3696,7 +3776,10 @@ class _DashboardPageState extends State<DashboardPage> {
                           },
                         ),
                         ListTile(
-                          leading: Icon(Icons.sync_outlined, color: temaAtual.cor1),
+                          leading: Icon(
+                            Icons.sync_outlined,
+                            color: temaAtual.cor1,
+                          ),
                           title: const Text('Sincronização e Backup'),
                           onTap: () {
                             Navigator.pop(context); // Fecha a modal de config
@@ -3704,7 +3787,10 @@ class _DashboardPageState extends State<DashboardPage> {
                           },
                         ),
                         ListTile(
-                          leading: Icon(Icons.picture_as_pdf_outlined, color: temaAtual.cor1),
+                          leading: Icon(
+                            Icons.picture_as_pdf_outlined,
+                            color: temaAtual.cor1,
+                          ),
                           title: const Text('Exportar Relatório PDF'),
                           onTap: () {
                             Navigator.pop(context); // Fecha a modal de config
@@ -4139,8 +4225,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     children: [
                       Text(
                         'Versão $_appVersion',
-                        style:
-                            TextStyle(fontSize: 11, color: Colors.grey[600]),
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                       ),
                       TextButton(
                         onPressed: () => Navigator.pop(context),
